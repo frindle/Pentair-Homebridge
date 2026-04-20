@@ -8,7 +8,6 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
