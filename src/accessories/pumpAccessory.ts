@@ -92,7 +92,7 @@ export class PentairPumpAccessory {
     this.api = api;
     this.deviceId = config.deviceId;
 
-    const { Service: Svc, Characteristic: Char } = this.platform.hapApi;
+    const { Service: Svc, Characteristic: Char } = this.platform.hapApi.hap;
 
     // ---------------------------------------------------------------------------
     // Accessory information service
@@ -134,8 +134,8 @@ export class PentairPumpAccessory {
   /** Returns whether the pump is currently active. */
   private handleActiveGet(): CharacteristicValue {
     return this.state.active
-      ? this.platform.hapApi.Characteristic.Active.ACTIVE
-      : this.platform.hapApi.Characteristic.Active.INACTIVE;
+      ? this.platform.hapApi.hap.Characteristic.Active.ACTIVE
+      : this.platform.hapApi.hap.Characteristic.Active.INACTIVE;
   }
 
   /**
@@ -144,7 +144,7 @@ export class PentairPumpAccessory {
    * Off: stops all programs.
    */
   private async handleActiveSet(value: CharacteristicValue): Promise<void> {
-    const wantActive = value === this.platform.hapApi.Characteristic.Active.ACTIVE;
+    const wantActive = value === this.platform.hapApi.hap.Characteristic.Active.ACTIVE;
     this.platform.log.info(
       `Pump [${this.deviceId}]: set active → ${wantActive}`,
     );
@@ -177,7 +177,7 @@ export class PentairPumpAccessory {
     if (speed === 0) {
       // Speed set to 0 means stop.
       await this.handleActiveSet(
-        this.platform.hapApi.Characteristic.Active.INACTIVE,
+        this.platform.hapApi.hap.Characteristic.Active.INACTIVE,
       );
       return;
     }
@@ -281,7 +281,7 @@ export class PentairPumpAccessory {
         this.state.program = runningProgram;
       }
 
-      const { Characteristic: Char } = this.platform.hapApi;
+      const { Characteristic: Char } = this.platform.hapApi.hap;
 
       if (prevActive !== isActive) {
         this.service.updateCharacteristic(

@@ -175,11 +175,7 @@ export class PentairApi {
     // Convert signed headers to a plain object understood by fetch.
     const fetchHeaders: Record<string, string> = {};
     for (const [key, value] of Object.entries(signed.headers)) {
-      if (typeof value === 'string') {
-        fetchHeaders[key] = value;
-      } else if (Array.isArray(value)) {
-        fetchHeaders[key] = value.join(', ');
-      }
+      fetchHeaders[key] = value;
     }
 
     const url = `https://${API_BASE_HOST}${path}`;

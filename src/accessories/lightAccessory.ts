@@ -121,7 +121,7 @@ export class PentairLightAccessory {
     this.api = api;
     this.deviceId = config.deviceId;
 
-    const { Service: Svc, Characteristic: Char } = this.platform.hapApi;
+    const { Service: Svc, Characteristic: Char } = this.platform.hapApi.hap;
 
     // ---------------------------------------------------------------------------
     // Accessory information service
@@ -283,7 +283,7 @@ export class PentairLightAccessory {
       const newHue = COLOR_TO_HUE[colorIndex] ?? 0;
       const newSat = colorIndex === PentairColor.White ? 0 : 100;
 
-      const { Characteristic: Char } = this.platform.hapApi;
+      const { Characteristic: Char } = this.platform.hapApi.hap;
 
       if (prevOn !== isOn) {
         this.service.updateCharacteristic(Char.On, isOn);
