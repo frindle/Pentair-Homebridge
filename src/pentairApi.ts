@@ -142,9 +142,9 @@ export class PentairApi {
 
     const headers: Record<string, string> = {
       host: API_BASE_HOST,
-      'content-type': 'application/json',
     };
     if (bodyString) {
+      headers['content-type'] = 'application/json';
       headers['content-length'] = String(Buffer.byteLength(bodyString, 'utf-8'));
     }
 

@@ -103,14 +103,14 @@ export class PentairAuth {
    */
   async authenticate(): Promise<void> {
     const { idToken, refreshToken } = await this.fetchTokens();
-    const credentials = await this.fetchCredentials(idToken);
+    const { credentials, expiry: credentialsExpiry } = await this.fetchCredentials(idToken);
 
     this.session = {
       idToken,
       refreshToken,
       idTokenExpiry: jwtExpiry(idToken),
       credentials,
-      credentialsExpiry: jwtExpiry(idToken), // creds expire ~= ID token expiry
+      credentialsExpiry,
     };
   }
 
@@ -136,7 +136,7 @@ export class PentairAuth {
     // Attempt refresh token flow first.
     try {
       const refreshed = await this.refreshTokens(this.session.refreshToken);
-      const credentials = await this.fetchCredentials(refreshed.idToken);
+      const { credentials, expiry: credentialsExpiry } = await this.fetchCredentials(refreshed.idToken);
 
       this.session = {
         idToken: refreshed.idToken,
@@ -144,7 +144,7 @@ export class PentairAuth {
         refreshToken: refreshed.refreshToken ?? this.session.refreshToken,
         idTokenExpiry: jwtExpiry(refreshed.idToken),
         credentials,
-        credentialsExpiry: jwtExpiry(refreshed.idToken),
+        credentialsExpiry,
       };
     } catch {
       // Fall back to full re-authentication with username/password.
@@ -235,13 +235,14 @@ export class PentairAuth {
    * Identity Pool.
    *
    * @param idToken - The Cognito User Pool ID token.
-   * @returns Temporary AWS credentials.
+   * @returns Temporary AWS credentials and their expiry (Unix epoch seconds).
    */
-  private async fetchCredentials(idToken: string): Promise<AwsCredentials> {
+  private async fetchCredentials(
+    idToken: string,
+  ): Promise<{ credentials: AwsCredentials; expiry: number }> {
     // Step 1: resolve the Identity Pool identity ID for this user.
     const getIdResponse = await this.identityClient.send(
       new GetIdCommand({
-        AccountId: COGNITO_IDENTITY_POOL_ID.split(':')[0], // AWS account not needed but API accepts it
         IdentityPoolId: COGNITO_IDENTITY_POOL_ID,
         Logins: {
           [COGNITO_LOGIN_KEY]: idToken,
@@ -275,10 +276,18 @@ export class PentairAuth {
       );
     }
 
+    // Use the actual STS expiry when available; fall back to ID token expiry.
+    const expiry = rawCreds.Expiration
+      ? Math.floor(rawCreds.Expiration.getTime() / 1000)
+      : jwtExpiry(idToken);
+
     return {
-      accessKeyId: rawCreds.AccessKeyId,
-      secretAccessKey: rawCreds.SecretKey,
-      sessionToken: rawCreds.SessionToken,
+      credentials: {
+        accessKeyId: rawCreds.AccessKeyId,
+        secretAccessKey: rawCreds.SecretKey,
+        sessionToken: rawCreds.SessionToken,
+      },
+      expiry,
     };
   }
 }
