@@ -1,0 +1,78 @@
+{
+  "pluginAlias": "PentairHomebridge",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "title": "Pentair Account Email",
+        "type": "string",
+        "format": "email",
+        "required": true
+      },
+      "password": {
+        "title": "Pentair Account Password",
+        "type": "string",
+        "required": true,
+        "x-schema-form": {
+          "type": "password"
+        }
+      },
+      "pump": {
+        "title": "Pool Pump",
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Accessory Name",
+            "type": "string",
+            "default": "Pool Pump"
+          },
+          "deviceId": {
+            "title": "Device ID",
+            "type": "string",
+            "description": "Found in Homebridge logs on first run if left blank"
+          }
+        }
+      },
+      "light": {
+        "title": "Pool Light",
+        "type": "object",
+        "properties": {
+          "name": {
+            "title": "Accessory Name",
+            "type": "string",
+            "default": "Pool Light"
+          },
+          "deviceId": {
+            "title": "Device ID",
+            "type": "string",
+            "description": "Found in Homebridge logs on first run if left blank"
+          }
+        }
+      }
+    }
+  },
+  "form": [
+    {
+      "type": "section",
+      "title": "Pentair Account",
+      "expandable": false,
+      "items": ["email", "password"]
+    },
+    {
+      "type": "section",
+      "title": "Pool Pump (optional)",
+      "expandable": true,
+      "expanded": false,
+      "items": ["pump.name", "pump.deviceId"]
+    },
+    {
+      "type": "section",
+      "title": "Pool Light (optional)",
+      "expandable": true,
+      "expanded": false,
+      "items": ["light.name", "light.deviceId"]
+    }
+  ]
+}
