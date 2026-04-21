@@ -89,18 +89,32 @@ export class PentairApi {
     const response = await this.signedRequest(
       'POST',
       ENDPOINT_DEVICE_STATUS,
-      { deviceId },
+      { serialNumber: deviceId },
     );
 
     if (response && typeof response === 'object' && !Array.isArray(response)) {
       const obj = response as Record<string, unknown>;
-      // Status may be nested under a "payload" or "data" key.
-      for (const key of ['payload', 'data', 'status']) {
-        if (obj[key] && typeof obj[key] === 'object') {
-          return obj[key] as DeviceStatus;
+
+      // Unwrap top-level "response" envelope if present.
+      const inner = (obj['response'] && typeof obj['response'] === 'object')
+        ? obj['response'] as Record<string, unknown>
+        : obj;
+
+      // data may be an array (one element per device) or a plain object.
+      if (Array.isArray(inner['data'])) {
+        const arr = inner['data'] as Record<string, unknown>[];
+        if (arr.length > 0) {
+          return arr[0] as DeviceStatus;
         }
+        this.log.warn(`PentairApi: device status returned empty data array for ${deviceId}`);
+        return {};
       }
-      return obj as DeviceStatus;
+
+      if (inner['data'] && typeof inner['data'] === 'object') {
+        return inner['data'] as DeviceStatus;
+      }
+
+      return inner as DeviceStatus;
     }
 
     this.log.warn('PentairApi: unexpected shape from getDeviceStatus');
