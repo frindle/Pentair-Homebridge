@@ -4,7 +4,8 @@
  * for the Pentair Cloud API.
  *
  * Authentication flow:
- *  1. USER_PASSWORD_AUTH via Cognito User Pool → IdToken + RefreshToken
+ *  1. USER_SRP_AUTH via amazon-cognito-identity-js (handles SRP crypto)
+ *     → IdToken + RefreshToken
  *  2. GetId + GetCredentialsForIdentity via Cognito Identity Pool
  *     → temporary AWS credentials (accessKeyId / secretAccessKey / sessionToken)
  *
@@ -13,7 +14,7 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PentairAuth = void 0;
-const client_cognito_identity_provider_1 = require("@aws-sdk/client-cognito-identity-provider");
+const amazon_cognito_identity_js_1 = require("amazon-cognito-identity-js");
 const client_cognito_identity_1 = require("@aws-sdk/client-cognito-identity");
 const settings_1 = require("./settings");
 /**
@@ -32,22 +33,16 @@ function jwtExpiry(token) {
     }
 }
 /**
- * Manages Pentair Cloud authentication using AWS Cognito.
- *
- * Usage:
- * ```ts
- * const auth = new PentairAuth('user@example.com', 'password');
- * await auth.authenticate();
- * const creds = await auth.getCredentials();
- * ```
+ * Manages Pentair Cloud authentication using AWS Cognito SRP auth.
  */
 class PentairAuth {
     constructor(username, password) {
         this.session = null;
         this.username = username;
         this.password = password;
-        this.userPoolClient = new client_cognito_identity_provider_1.CognitoIdentityProviderClient({
-            region: settings_1.AWS_REGION,
+        this.userPool = new amazon_cognito_identity_js_1.CognitoUserPool({
+            UserPoolId: settings_1.COGNITO_USER_POOL_ID,
+            ClientId: settings_1.COGNITO_CLIENT_ID,
         });
         this.identityClient = new client_cognito_identity_1.CognitoIdentityClient({
             region: settings_1.AWS_REGION,
@@ -55,10 +50,8 @@ class PentairAuth {
     }
     /**
      * Performs the full two-step authentication:
-     *  1. USER_PASSWORD_AUTH → ID token + refresh token
+     *  1. SRP auth → ID token + refresh token
      *  2. Cognito Identity Pool → temporary AWS credentials
-     *
-     * @throws {Error} if Cognito returns no authentication result or tokens.
      */
     async authenticate() {
         const { idToken, refreshToken } = await this.fetchTokens();
@@ -73,42 +66,34 @@ class PentairAuth {
     }
     /**
      * Refreshes credentials if the ID token will expire within the next 5 minutes.
-     * Silently no-ops when the session is still fresh.
-     *
-     * @throws {Error} if refresh fails and no valid session exists.
      */
     async refreshIfNeeded() {
-        const BUFFER_SECONDS = 300; // refresh 5 min before expiry
+        const BUFFER_SECONDS = 300;
         const nowSeconds = Math.floor(Date.now() / 1000);
         if (!this.session) {
             await this.authenticate();
             return;
         }
         if (this.session.idTokenExpiry - nowSeconds > BUFFER_SECONDS) {
-            return; // token is still valid
+            return;
         }
-        // Attempt refresh token flow first.
         try {
             const refreshed = await this.refreshTokens(this.session.refreshToken);
             const { credentials, expiry: credentialsExpiry } = await this.fetchCredentials(refreshed.idToken);
             this.session = {
                 idToken: refreshed.idToken,
-                // Refresh token may or may not be rotated; keep old one if not returned.
-                refreshToken: refreshed.refreshToken ?? this.session.refreshToken,
+                refreshToken: this.session.refreshToken,
                 idTokenExpiry: jwtExpiry(refreshed.idToken),
                 credentials,
                 credentialsExpiry,
             };
         }
         catch {
-            // Fall back to full re-authentication with username/password.
             await this.authenticate();
         }
     }
     /**
      * Returns the current AWS credentials, refreshing them first if necessary.
-     *
-     * @returns Temporary AWS credentials for SigV4 signing.
      */
     async getCredentials() {
         await this.refreshIfNeeded();
@@ -121,61 +106,51 @@ class PentairAuth {
     // Private helpers
     // ---------------------------------------------------------------------------
     /**
-     * Calls USER_PASSWORD_AUTH flow and extracts the ID + refresh tokens.
+     * Authenticates using SRP via amazon-cognito-identity-js.
      */
-    async fetchTokens() {
-        const command = new client_cognito_identity_provider_1.InitiateAuthCommand({
-            AuthFlow: 'USER_PASSWORD_AUTH',
-            ClientId: settings_1.COGNITO_CLIENT_ID,
-            AuthParameters: {
-                USERNAME: this.username,
-                PASSWORD: this.password,
-            },
+    fetchTokens() {
+        return new Promise((resolve, reject) => {
+            const cognitoUser = new amazon_cognito_identity_js_1.CognitoUser({
+                Username: this.username,
+                Pool: this.userPool,
+            });
+            cognitoUser.authenticateUser(new amazon_cognito_identity_js_1.AuthenticationDetails({
+                Username: this.username,
+                Password: this.password,
+            }), {
+                onSuccess: (session) => {
+                    resolve({
+                        idToken: session.getIdToken().getJwtToken(),
+                        refreshToken: session.getRefreshToken().getToken(),
+                    });
+                },
+                onFailure: reject,
+            });
         });
-        const response = await this.userPoolClient.send(command);
-        const result = response.AuthenticationResult;
-        if (!result) {
-            throw new Error('PentairAuth: Cognito returned no AuthenticationResult');
-        }
-        if (!result.IdToken || !result.RefreshToken) {
-            throw new Error('PentairAuth: Cognito response missing IdToken or RefreshToken');
-        }
-        return {
-            idToken: result.IdToken,
-            refreshToken: result.RefreshToken,
-        };
     }
     /**
-     * Calls REFRESH_TOKEN_AUTH flow and returns the refreshed ID token.
-     * The refresh token itself is only returned when Cognito rotates it.
+     * Refreshes the session using the stored refresh token.
      */
-    async refreshTokens(refreshToken) {
-        const command = new client_cognito_identity_provider_1.InitiateAuthCommand({
-            AuthFlow: 'REFRESH_TOKEN_AUTH',
-            ClientId: settings_1.COGNITO_CLIENT_ID,
-            AuthParameters: {
-                REFRESH_TOKEN: refreshToken,
-            },
+    refreshTokens(refreshToken) {
+        return new Promise((resolve, reject) => {
+            const cognitoUser = new amazon_cognito_identity_js_1.CognitoUser({
+                Username: this.username,
+                Pool: this.userPool,
+            });
+            cognitoUser.refreshSession(new amazon_cognito_identity_js_1.CognitoRefreshToken({ RefreshToken: refreshToken }), (err, session) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve({ idToken: session.getIdToken().getJwtToken() });
+            });
         });
-        const response = await this.userPoolClient.send(command);
-        const result = response.AuthenticationResult;
-        if (!result?.IdToken) {
-            throw new Error('PentairAuth: token refresh returned no IdToken');
-        }
-        return {
-            idToken: result.IdToken,
-            refreshToken: result.RefreshToken,
-        };
     }
     /**
      * Exchanges a Cognito ID token for temporary AWS credentials via the
      * Identity Pool.
-     *
-     * @param idToken - The Cognito User Pool ID token.
-     * @returns Temporary AWS credentials and their expiry (Unix epoch seconds).
      */
     async fetchCredentials(idToken) {
-        // Step 1: resolve the Identity Pool identity ID for this user.
         const getIdResponse = await this.identityClient.send(new client_cognito_identity_1.GetIdCommand({
             IdentityPoolId: settings_1.COGNITO_IDENTITY_POOL_ID,
             Logins: {
@@ -186,7 +161,6 @@ class PentairAuth {
         if (!identityId) {
             throw new Error('PentairAuth: GetId returned no IdentityId');
         }
-        // Step 2: exchange the identity ID + ID token for STS credentials.
         const credsResponse = await this.identityClient.send(new client_cognito_identity_1.GetCredentialsForIdentityCommand({
             IdentityId: identityId,
             Logins: {
@@ -199,7 +173,6 @@ class PentairAuth {
             !rawCreds.SessionToken) {
             throw new Error('PentairAuth: GetCredentialsForIdentity returned incomplete credentials');
         }
-        // Use the actual STS expiry when available; fall back to ID token expiry.
         const expiry = rawCreds.Expiration
             ? Math.floor(rawCreds.Expiration.getTime() / 1000)
             : jwtExpiry(idToken);
