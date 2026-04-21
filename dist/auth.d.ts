@@ -42,6 +42,11 @@ export declare class PentairAuth {
      */
     getCredentials(): Promise<AwsCredentials>;
     /**
+     * Returns the current Cognito ID token, refreshing if necessary.
+     * Required as the x-amz-id-token header on every API request.
+     */
+    getIdToken(): Promise<string>;
+    /**
      * Authenticates using SRP via amazon-cognito-identity-js.
      */
     private fetchTokens;

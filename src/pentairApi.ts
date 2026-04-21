@@ -136,15 +136,20 @@ export class PentairApi {
     body?: unknown,
   ): Promise<unknown> {
     // Ensure credentials are fresh before signing.
-    const credentials = await this.auth.getCredentials();
+    const [credentials, idToken] = await Promise.all([
+      this.auth.getCredentials(),
+      this.auth.getIdToken(),
+    ]);
 
     const bodyString = body !== undefined ? JSON.stringify(body) : undefined;
 
     const headers: Record<string, string> = {
       host: API_BASE_HOST,
+      'x-amz-id-token': idToken,
+      'user-agent': 'aws-amplify/4.3.10 react-native',
     };
     if (bodyString) {
-      headers['content-type'] = 'application/json';
+      headers['content-type'] = 'application/json; charset=UTF-8';
       headers['content-length'] = String(Buffer.byteLength(bodyString, 'utf-8'));
     }
 

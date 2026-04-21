@@ -154,6 +154,20 @@ export class PentairAuth {
     return this.session.credentials;
   }
 
+  /**
+   * Returns the current Cognito ID token, refreshing if necessary.
+   * Required as the x-amz-id-token header on every API request.
+   */
+  async getIdToken(): Promise<string> {
+    await this.refreshIfNeeded();
+
+    if (!this.session) {
+      throw new Error('PentairAuth: no session available after refresh attempt');
+    }
+
+    return this.session.idToken;
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
