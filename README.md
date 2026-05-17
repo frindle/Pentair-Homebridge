@@ -1,5 +1,8 @@
 # homebridge-pentair-cloud
 
+[![npm version](https://img.shields.io/npm/v/homebridge-pentair-cloud)](https://www.npmjs.com/package/homebridge-pentair-cloud)
+[![npm downloads](https://img.shields.io/npm/dm/homebridge-pentair-cloud)](https://www.npmjs.com/package/homebridge-pentair-cloud)
+
 Homebridge plugin for Pentair pool equipment via the Pentair Home cloud API.
 
 ## Supported Devices
@@ -116,6 +119,10 @@ API endpoints used:
 | List devices | `GET /device/device-service/user/devices` |
 | Device status | `POST /device2/device2-service/user/device` |
 | Send command | `PUT /device/device-service/user/device/{deviceId}` |
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for version history.
 
 ## License
 
