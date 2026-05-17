@@ -112,6 +112,7 @@ class PentairPumpAccessory {
     async handleActiveSet(value) {
         const wantActive = value === this.platform.hapApi.hap.Characteristic.Active.ACTIVE;
         this.platform.log.info(`Pump [${this.deviceId}]: set active → ${wantActive}`);
+        const prevActive = this.state.active;
         try {
             if (wantActive) {
                 await this.startProgram(this.state.program);
@@ -124,6 +125,7 @@ class PentairPumpAccessory {
         }
         catch (err) {
             this.platform.log.error(`Pump [${this.deviceId}]: active set failed`, err);
+            this.state.active = prevActive;
         }
     }
     /** Returns the rotation speed corresponding to the current program. */

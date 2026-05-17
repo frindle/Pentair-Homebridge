@@ -149,6 +149,7 @@ export class PentairPumpAccessory {
       `Pump [${this.deviceId}]: set active → ${wantActive}`,
     );
 
+    const prevActive = this.state.active;
     try {
       if (wantActive) {
         await this.startProgram(this.state.program);
@@ -159,6 +160,7 @@ export class PentairPumpAccessory {
       }
     } catch (err) {
       this.platform.log.error(`Pump [${this.deviceId}]: active set failed`, err);
+      this.state.active = prevActive;
     }
   }
 
