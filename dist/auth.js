@@ -32,6 +32,11 @@ const HEX_N = 'EE71AF00BBF8C4D6D24C2F1B3842CE12865F141C2CD4D4BB64D5F5C7DB6A70F1D
 const HEX_G = '02';
 /** Byte length of N (and all SRP values A, B, S) */
 const N_BYTES = 256;
+// Verify HEX_N is exactly 512 hex chars (256 bytes) at module load time.
+// A single character error in these constants would silently break SRP entirely.
+if (HEX_N.length !== 512) {
+    throw new Error(`auth: HEX_N must be 512 hex chars (256 bytes), got ${HEX_N.length}`);
+}
 // ---------------------------------------------------------------------------
 // Low-level crypto helpers (pure Node.js, no external dependencies)
 // ---------------------------------------------------------------------------
@@ -50,10 +55,13 @@ function bigIntToBytes(n, byteLen) {
     return Buffer.from(hexToBytes(hex));
 }
 function sha256(data) {
-    return (0, crypto_1.createHmac)('sha256', Buffer.alloc(0)).update(data).digest();
+    return (0, crypto_1.createHash)('sha256').update(data).digest();
 }
 function sha256Hex(hexString) {
-    return sha256(Buffer.from(hexToBytes(hexString))).toString('hex');
+    return (0, crypto_1.createHash)('sha256')
+        .update(Buffer.from(hexToBytes(hexString)))
+        .digest()
+        .toString('hex');
 }
 /** Modular exponentiation: (base^exp) % mod */
 function modExp(base, exp, mod) {

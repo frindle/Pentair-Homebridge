@@ -124,7 +124,6 @@ class PentairPumpAccessory {
         }
         catch (err) {
             this.platform.log.error(`Pump [${this.deviceId}]: active set failed`, err);
-            throw err;
         }
     }
     /** Returns the rotation speed corresponding to the current program. */
@@ -151,7 +150,6 @@ class PentairPumpAccessory {
         }
         catch (err) {
             this.platform.log.error(`Pump [${this.deviceId}]: speed set failed`, err);
-            throw err;
         }
     }
     // ---------------------------------------------------------------------------

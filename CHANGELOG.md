@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.0] - 2026-05-17
+
+### Fixed
+- Stop throwing errors to HomeKit on command failures — prevents "not responding" status in the Home app when Pentair cloud is slow
+- Add compile-time sanity check for SRP constant HEX_N (throws immediately if not 512 chars)
+- Replace `createHmac` with `createHash` for cleaner, standard Node.js SHA-256
+- Remove unused `API_BASE_URL` constant
+
+### Security
+- Inherit all fixes from 1.0.9
+
 ## [1.0.9] - 2026-05-17
 
 ### Security

@@ -13,7 +13,7 @@
  * with AWS Signature Version 4.
  */
 
-import { createHmac, randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import {
   CognitoIdentityClient,
   GetIdCommand,
@@ -68,6 +68,14 @@ const HEX_G = '02';
 /** Byte length of N (and all SRP values A, B, S) */
 const N_BYTES = 256;
 
+// Verify HEX_N is exactly 512 hex chars (256 bytes) at module load time.
+// A single character error in these constants would silently break SRP entirely.
+if (HEX_N.length !== 512) {
+  throw new Error(
+    `auth: HEX_N must be 512 hex chars (256 bytes), got ${HEX_N.length}`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Low-level crypto helpers (pure Node.js, no external dependencies)
 // ---------------------------------------------------------------------------
@@ -90,11 +98,14 @@ function bigIntToBytes(n: bigint, byteLen: number): Buffer {
 }
 
 function sha256(data: Buffer): Buffer {
-  return createHmac('sha256', Buffer.alloc(0)).update(data).digest();
+  return createHash('sha256').update(data).digest();
 }
 
 function sha256Hex(hexString: string): string {
-  return sha256(Buffer.from(hexToBytes(hexString))).toString('hex');
+  return createHash('sha256')
+    .update(Buffer.from(hexToBytes(hexString)))
+    .digest()
+    .toString('hex');
 }
 
 /** Modular exponentiation: (base^exp) % mod */

@@ -43,9 +43,6 @@ export const COGNITO_LOGIN_KEY =
 /** Base hostname for all Pentair Cloud API calls (no trailing slash). */
 export const API_BASE_HOST = 'api.pentair.cloud';
 
-/** Full base URL including scheme. */
-export const API_BASE_URL = `https://${API_BASE_HOST}`;
-
 /** AWS service name used for SigV4 request signing. */
 export const API_SERVICE_NAME = 'execute-api';
 

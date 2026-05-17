@@ -159,7 +159,6 @@ export class PentairPumpAccessory {
       }
     } catch (err) {
       this.platform.log.error(`Pump [${this.deviceId}]: active set failed`, err);
-      throw err;
     }
   }
 
@@ -193,7 +192,6 @@ export class PentairPumpAccessory {
       this.state.active = true;
     } catch (err) {
       this.platform.log.error(`Pump [${this.deviceId}]: speed set failed`, err);
-      throw err;
     }
   }
 

@@ -176,7 +176,6 @@ export class PentairLightAccessory {
       this.state.on = on;
     } catch (err) {
       this.platform.log.error(`Light [${this.deviceId}]: on/off set failed`, err);
-      throw err;
     }
   }
 

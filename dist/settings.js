@@ -5,7 +5,7 @@
  * from any module without circular dependencies.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.STATUS_POLL_INTERVAL_MS = exports.ENDPOINT_SEND_COMMAND = exports.ENDPOINT_DEVICE_STATUS = exports.ENDPOINT_LIST_DEVICES = exports.API_SERVICE_NAME = exports.API_BASE_URL = exports.API_BASE_HOST = exports.COGNITO_LOGIN_KEY = exports.COGNITO_IDENTITY_POOL_ID = exports.COGNITO_CLIENT_ID = exports.COGNITO_USER_POOL_ID = exports.AWS_REGION = exports.PLUGIN_NAME = exports.PLATFORM_NAME = void 0;
+exports.STATUS_POLL_INTERVAL_MS = exports.ENDPOINT_SEND_COMMAND = exports.ENDPOINT_DEVICE_STATUS = exports.ENDPOINT_LIST_DEVICES = exports.API_SERVICE_NAME = exports.API_BASE_HOST = exports.COGNITO_LOGIN_KEY = exports.COGNITO_IDENTITY_POOL_ID = exports.COGNITO_CLIENT_ID = exports.COGNITO_USER_POOL_ID = exports.AWS_REGION = exports.PLUGIN_NAME = exports.PLATFORM_NAME = void 0;
 /** The platform name registered with Homebridge. */
 exports.PLATFORM_NAME = 'PentairHomebridge';
 /** The npm package name; used when registering the plugin. */
@@ -34,8 +34,6 @@ exports.COGNITO_LOGIN_KEY = `cognito-idp.${exports.AWS_REGION}.amazonaws.com/${e
 // ---------------------------------------------------------------------------
 /** Base hostname for all Pentair Cloud API calls (no trailing slash). */
 exports.API_BASE_HOST = 'api.pentair.cloud';
-/** Full base URL including scheme. */
-exports.API_BASE_URL = `https://${exports.API_BASE_HOST}`;
 /** AWS service name used for SigV4 request signing. */
 exports.API_SERVICE_NAME = 'execute-api';
 // ---------------------------------------------------------------------------

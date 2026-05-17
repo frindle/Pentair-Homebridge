@@ -25,8 +25,6 @@ export declare const COGNITO_IDENTITY_POOL_ID = "us-west-2:6f950f85-af44-43d9-b6
 export declare const COGNITO_LOGIN_KEY = "cognito-idp.us-west-2.amazonaws.com/us-west-2_lbiduhSwD";
 /** Base hostname for all Pentair Cloud API calls (no trailing slash). */
 export declare const API_BASE_HOST = "api.pentair.cloud";
-/** Full base URL including scheme. */
-export declare const API_BASE_URL = "https://api.pentair.cloud";
 /** AWS service name used for SigV4 request signing. */
 export declare const API_SERVICE_NAME = "execute-api";
 /** List all devices belonging to the authenticated user. */
