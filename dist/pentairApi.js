@@ -158,22 +158,38 @@ class PentairApi {
             fetchOptions.body = bodyString;
         }
         let response;
+        let text = '';
         try {
             response = await fetch(url, fetchOptions);
+        }
+        catch (err) {
+            throw new Error(`PentairApi: ${method} ${path} → network error: ${err.message}`);
         }
         finally {
             clearTimeout(timeout);
         }
         if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            throw new Error(`PentairApi: ${method} ${path} → HTTP ${response.status}: ${text}`);
+            try {
+                text = await response.text();
+            }
+            catch {
+                text = '<could not read body>';
+            }
+            // Truncate error body to 200 chars to avoid leaking internal API details in logs
+            const safeText = text.length > 200 ? text.slice(0, 200) + '…(truncated)' : text;
+            throw new Error(`PentairApi: ${method} ${path} → HTTP ${response.status}: ${safeText}`);
         }
         // 204 No Content or similar – nothing to parse.
         const contentType = response.headers.get('content-type') ?? '';
         if (!contentType.includes('application/json')) {
             return null;
         }
-        const json = await response.json();
+        // Read with a 1 MB cap to prevent memory exhaustion from malicious responses.
+        text = await response.text();
+        if (text.length > 1048576) {
+            throw new Error(`PentairApi: response body too large (${text.length} bytes, max 1 MB)`);
+        }
+        const json = JSON.parse(text);
         return json;
     }
 }

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.8] - 2026-05-17
+
+### Security
+- Cap API response body at 1 MB to prevent memory exhaustion from malicious responses
+- Truncate API error body to 200 chars in logs to prevent internal details leaking
+- Guard program number in `startProgram` with `Math.max/Math.min` bounds clamp
+
+### Fixed
+- Fix network error handling: fetch errors now throw a descriptive error instead of crashing with `TypeError: Cannot read properties of undefined`
+
 ## [1.0.7] - 2026-05-17
 
 ### Added

@@ -163,8 +163,9 @@ class PentairPumpAccessory {
      * @param program - Program number 1–4.
      */
     async startProgram(program) {
+        const p = Math.max(1, Math.min(PROGRAM_COUNT, Math.floor(program)));
         await this.api.sendCommand(this.deviceId, {
-            [`zp${program}e10`]: '3',
+            [`zp${p}e10`]: '3',
         });
     }
     /**
