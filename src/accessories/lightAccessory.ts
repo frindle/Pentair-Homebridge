@@ -173,7 +173,6 @@ export class PentairLightAccessory {
     this.platform.log.info(`Light [${this.deviceId}]: set on → ${on}`);
     try {
       await this.api.sendCommand(this.deviceId, { lse: on ? '1' : '0' });
-      this.state.on = on;
     } catch (err) {
       this.platform.log.error(`Light [${this.deviceId}]: on/off set failed`, err);
     }
