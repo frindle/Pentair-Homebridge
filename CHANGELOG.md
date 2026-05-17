@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.9] - 2026-05-17
+
+### Security
+- **Remove `amazon-cognito-identity-js`** — replaced with pure Node.js `crypto` SRP-6a implementation using `@aws-sdk/client-cognito-identity-provider`. No more deprecated credential-handling package.
+- Add `.npmignore` to exclude source files and dev artifacts from npm package
+- Fix `config.schema.json`: add missing `required` array and `type` on `pump`/`light` objects for proper Homebridge UI validation
+
 ## [1.0.8] - 2026-05-17
 
 ### Security

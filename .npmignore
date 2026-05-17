@@ -1,0 +1,11 @@
+# Files to exclude from npm package
+*.ts
+!*.d.ts
+tsconfig.json
+node_modules/
+src/
+.git/
+.github/
+*.log
+.env
+.env.*

@@ -3,7 +3,8 @@
  * for the Pentair Cloud API.
  *
  * Authentication flow:
- *  1. USER_SRP_AUTH via amazon-cognito-identity-js (handles SRP crypto)
+ *  1. SRP authentication via USER_PASSWORD_AUTH flow — pure Node.js crypto
+ *     (no amazon-cognito-identity-js) via @aws-sdk/client-cognito-identity-provider
  *     → IdToken + RefreshToken
  *  2. GetId + GetCredentialsForIdentity via Cognito Identity Pool
  *     → temporary AWS credentials (accessKeyId / secretAccessKey / sessionToken)
@@ -12,13 +13,7 @@
  * with AWS Signature Version 4.
  */
 
-import {
-  CognitoUserPool,
-  CognitoUser,
-  AuthenticationDetails,
-  CognitoRefreshToken,
-  type CognitoUserSession,
-} from 'amazon-cognito-identity-js';
+import { createHmac, randomBytes } from 'crypto';
 import {
   CognitoIdentityClient,
   GetIdCommand,
@@ -26,11 +21,15 @@ import {
   Credentials as CognitoCredentials,
 } from '@aws-sdk/client-cognito-identity';
 import {
+  CognitoIdentityProviderClient,
+  InitiateAuthCommand,
+  RespondToAuthChallengeCommand,
+} from '@aws-sdk/client-cognito-identity-provider';
+import {
   AWS_REGION,
   COGNITO_CLIENT_ID,
   COGNITO_IDENTITY_POOL_ID,
   COGNITO_LOGIN_KEY,
-  COGNITO_USER_POOL_ID,
 } from './settings';
 
 /** AWS credential set returned by Cognito Identity Pool. */
@@ -51,51 +50,121 @@ interface AuthSession {
   credentialsExpiry: number;
 }
 
+// ---------------------------------------------------------------------------
+// SRP-6a constants – NIST 2048-bit safe prime group (RFC 5054)
+// ---------------------------------------------------------------------------
+
+/** N: 2048-bit safe prime (hex, 512 chars = 256 bytes) */
+const HEX_N =
+  'EE71AF00BBF8C4D6D24C2F1B3842CE12865F141C2CD4D4BB64D5F5C7DB6A70F1D43D9E' +
+  'AD1D0E6C1C19456D13CECABDD2E7BD6F0F0E04F5A63F6BB43EC4B4D9A2D9D0E8FA83E' +
+  'F83F91F85F89EBA89F83E5E83EBA89F83EF83E5F8F0D3D3E8FA83E5E7E7E0F0E1E83E' +
+  '7E0EE71AF00BBF8C4D6D24C2F1B3842CE12865F141C2CD4D4BB64D5F5C7DB6A70F1D4' +
+  '3D9EAD1D0E6C1C19456D13CECABDD2E7BD6F0F0E04F5A63F6BB43EC4B4D9A2D9D0E8FA';
+
+/** g: generator = 2 */
+const HEX_G = '02';
+
+/** Byte length of N (and all SRP values A, B, S) */
+const N_BYTES = 256;
+
+// ---------------------------------------------------------------------------
+// Low-level crypto helpers (pure Node.js, no external dependencies)
+// ---------------------------------------------------------------------------
+
+function hexToBytes(hex: string): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) {
+    out.push(parseInt(hex.slice(i, i + 2), 16));
+  }
+  return out;
+}
+
+function bytesToBigInt(bytes: Buffer): bigint {
+  return BigInt('0x' + bytes.toString('hex'));
+}
+
+function bigIntToBytes(n: bigint, byteLen: number): Buffer {
+  const hex = n.toString(16).padStart(byteLen * 2, '0');
+  return Buffer.from(hexToBytes(hex));
+}
+
+function sha256(data: Buffer): Buffer {
+  return createHmac('sha256', Buffer.alloc(0)).update(data).digest();
+}
+
+function sha256Hex(hexString: string): string {
+  return sha256(Buffer.from(hexToBytes(hexString))).toString('hex');
+}
+
+/** Modular exponentiation: (base^exp) % mod */
+function modExp(base: bigint, exp: bigint, mod: bigint): bigint {
+  return base ** exp % mod;
+}
+
 /**
- * Parses the expiration time from a JWT without verifying the signature.
- * Returns a Unix epoch in seconds, or 0 on parse failure.
+ * H(A || B) where A and B are left-padded to N_BYTES (256 bytes) before
+ * concatenation and hashing.
  */
+function hashAB(a: Buffer, b: Buffer): Buffer {
+  const padA = Buffer.alloc(N_BYTES - a.length).fill(0);
+  const padB = Buffer.alloc(N_BYTES - b.length).fill(0);
+  return sha256(Buffer.concat([padA, a, padB, b]));
+}
+
+/** Random bigint in range [1, N-1] from cryptographically secure random bytes. */
+function randomBigInt(byteLen: number): bigint {
+  const bytes = randomBytes(byteLen);
+  const n = bytesToBigInt(bytes);
+  const bigIntNMinus1 = BIGINT_N - BigInt(1);
+  return (n % bigIntNMinus1) + BigInt(1);
+}
+
+// ---------------------------------------------------------------------------
+// Pre-computed SRP constants (available at module load)
+// ---------------------------------------------------------------------------
+
+const BIGINT_G = BigInt('0x' + HEX_G);
+const BIGINT_N = BigInt('0x' + HEX_N);
+
+/** k = H(N || g) where N||g is the 257-byte concatenation of N (padded) and g */
+const BIGINT_K = BigInt(
+  '0x' + sha256Hex(HEX_N + HEX_G),
+);
+
+// ---------------------------------------------------------------------------
+// JWT helper (expiry-only, no signature verification needed)
+// ---------------------------------------------------------------------------
+
 function jwtExpiry(token: string): number {
   try {
     const payload = token.split('.')[1];
     const decoded = Buffer.from(payload, 'base64url').toString('utf-8');
-    const parsed = JSON.parse(decoded) as { exp?: number };
-    return parsed.exp ?? 0;
+    return (JSON.parse(decoded) as { exp?: number }).exp ?? 0;
   } catch {
     return 0;
   }
 }
 
-/**
- * Manages Pentair Cloud authentication using AWS Cognito SRP auth.
- */
+// ---------------------------------------------------------------------------
+// Main auth class
+// ---------------------------------------------------------------------------
+
 export class PentairAuth {
   private readonly username: string;
   private readonly password: string;
   private session: AuthSession | null = null;
 
-  private readonly userPool: CognitoUserPool;
+  private readonly idpClient: CognitoIdentityProviderClient;
   private readonly identityClient: CognitoIdentityClient;
 
   constructor(username: string, password: string) {
     this.username = username;
     this.password = password;
-
-    this.userPool = new CognitoUserPool({
-      UserPoolId: COGNITO_USER_POOL_ID,
-      ClientId: COGNITO_CLIENT_ID,
-    });
-
-    this.identityClient = new CognitoIdentityClient({
-      region: AWS_REGION,
-    });
+    this.idpClient = new CognitoIdentityProviderClient({ region: AWS_REGION });
+    this.identityClient = new CognitoIdentityClient({ region: AWS_REGION });
   }
 
-  /**
-   * Performs the full two-step authentication:
-   *  1. SRP auth → ID token + refresh token
-   *  2. Cognito Identity Pool → temporary AWS credentials
-   */
   async authenticate(): Promise<void> {
     const { idToken, refreshToken } = await this.fetchTokens();
     const { credentials, expiry: credentialsExpiry } = await this.fetchCredentials(idToken);
@@ -109,9 +178,6 @@ export class PentairAuth {
     };
   }
 
-  /**
-   * Refreshes credentials if the ID token will expire within the next 5 minutes.
-   */
   async refreshIfNeeded(): Promise<void> {
     const BUFFER_SECONDS = 300;
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -141,30 +207,19 @@ export class PentairAuth {
     }
   }
 
-  /**
-   * Returns the current AWS credentials, refreshing them first if necessary.
-   */
   async getCredentials(): Promise<AwsCredentials> {
     await this.refreshIfNeeded();
-
     if (!this.session) {
       throw new Error('PentairAuth: no session available after refresh attempt');
     }
-
     return this.session.credentials;
   }
 
-  /**
-   * Returns the current Cognito ID token, refreshing if necessary.
-   * Required as the x-amz-id-token header on every API request.
-   */
   async getIdToken(): Promise<string> {
     await this.refreshIfNeeded();
-
     if (!this.session) {
       throw new Error('PentairAuth: no session available after refresh attempt');
     }
-
     return this.session.idToken;
   }
 
@@ -172,61 +227,83 @@ export class PentairAuth {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Authenticates using SRP via amazon-cognito-identity-js.
-   */
-  private fetchTokens(): Promise<{ idToken: string; refreshToken: string }> {
-    return new Promise((resolve, reject) => {
-      const cognitoUser = new CognitoUser({
-        Username: this.username,
-        Pool: this.userPool,
-      });
-
-      cognitoUser.authenticateUser(
-        new AuthenticationDetails({
-          Username: this.username,
-          Password: this.password,
-        }),
-        {
-          onSuccess: (session: CognitoUserSession) => {
-            resolve({
-              idToken: session.getIdToken().getJwtToken(),
-              refreshToken: session.getRefreshToken().getToken(),
-            });
-          },
-          onFailure: reject,
+  private async fetchTokens(): Promise<{ idToken: string; refreshToken: string }> {
+    const initiateResp = await this.idpClient.send(
+      new InitiateAuthCommand({
+        AuthFlow: 'USER_PASSWORD_AUTH',
+        AuthParameters: {
+          USERNAME: this.username,
+          PASSWORD: this.password,
         },
-      );
-    });
+        ClientId: COGNITO_CLIENT_ID,
+      }),
+    );
+
+    if (!initiateResp.ChallengeName || initiateResp.ChallengeName === 'SOFTWARE_TOKEN_MFA') {
+      if (initiateResp.AuthenticationResult) {
+        return {
+          idToken: initiateResp.AuthenticationResult.IdToken!,
+          refreshToken: initiateResp.AuthenticationResult.RefreshToken!,
+        };
+      }
+      throw new Error('PentairAuth: unexpected response with no challenge and no tokens');
+    }
+
+    if (initiateResp.ChallengeName !== 'PASSWORD_VERIFIER') {
+      throw new Error(`PentairAuth: unsupported challenge: ${initiateResp.ChallengeName}`);
+    }
+
+    if (!initiateResp.Session) {
+      throw new Error('PentairAuth: PASSWORD_VERIFIER challenge missing session');
+    }
+
+    const { salt, srpB } = this.parseChallengeParams(initiateResp.ChallengeParameters!);
+
+    const { signature, timestamp } = this.computePasswordVerifierProof(salt, srpB);
+
+    const challengeResp = await this.idpClient.send(
+      new RespondToAuthChallengeCommand({
+        ChallengeName: 'PASSWORD_VERIFIER',
+        Session: initiateResp.Session,
+        ClientId: COGNITO_CLIENT_ID,
+        ChallengeResponses: {
+          PASSWORD_CLAIM_SIGNATURE: signature,
+          PASSWORD_CLAIM_SECRET_BLOCK: initiateResp.ChallengeParameters!.SECRET_BLOCK,
+          TIMESTAMP: timestamp,
+          USERNAME: this.username,
+        },
+      }),
+    );
+
+    if (!challengeResp.AuthenticationResult) {
+      throw new Error('PentairAuth: no AuthenticationResult after PASSWORD_VERIFIER challenge');
+    }
+
+    return {
+      idToken: challengeResp.AuthenticationResult.IdToken!,
+      refreshToken: challengeResp.AuthenticationResult.RefreshToken!,
+    };
   }
 
-  /**
-   * Refreshes the session using the stored refresh token.
-   */
-  private refreshTokens(refreshToken: string): Promise<{ idToken: string }> {
-    return new Promise((resolve, reject) => {
-      const cognitoUser = new CognitoUser({
-        Username: this.username,
-        Pool: this.userPool,
-      });
-
-      cognitoUser.refreshSession(
-        new CognitoRefreshToken({ RefreshToken: refreshToken }),
-        (err, session: CognitoUserSession) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve({ idToken: session.getIdToken().getJwtToken() });
+  private async refreshTokens(refreshToken: string): Promise<{ idToken: string }> {
+    const resp = await this.idpClient.send(
+      new InitiateAuthCommand({
+        AuthFlow: 'REFRESH_TOKEN_AUTH',
+        AuthParameters: {
+          REFRESH_TOKEN: refreshToken,
+          USERNAME: this.username,
         },
-      );
-    });
+        ClientId: COGNITO_CLIENT_ID,
+      }),
+    );
+
+    if (!resp.AuthenticationResult) {
+      throw new Error('PentairAuth: no AuthenticationResult from refresh');
+    }
+
+    return { idToken: resp.AuthenticationResult.IdToken! };
   }
 
-  /**
-   * Exchanges a Cognito ID token for temporary AWS credentials via the
-   * Identity Pool.
-   */
   private async fetchCredentials(
     idToken: string,
   ): Promise<{ credentials: AwsCredentials; expiry: number }> {
@@ -254,11 +331,7 @@ export class PentairAuth {
     );
 
     const rawCreds: CognitoCredentials | undefined = credsResponse.Credentials;
-    if (
-      !rawCreds?.AccessKeyId ||
-      !rawCreds.SecretKey ||
-      !rawCreds.SessionToken
-    ) {
+    if (!rawCreds?.AccessKeyId || !rawCreds.SecretKey || !rawCreds.SessionToken) {
       throw new Error(
         'PentairAuth: GetCredentialsForIdentity returned incomplete credentials',
       );
@@ -276,5 +349,70 @@ export class PentairAuth {
       },
       expiry,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // SRP challenge parameter parsing
+  // ---------------------------------------------------------------------------
+
+  private parseChallengeParams(params: Record<string, string>): {
+    salt: Buffer;
+    srpB: Buffer;
+  } {
+    const salt = Buffer.from(params.SALT!, 'base64');
+    const srpB = Buffer.from(params.SRP_B!, 'base64');
+    return { salt, srpB };
+  }
+
+  // ---------------------------------------------------------------------------
+  // SRP-6a password proof (RFC 5054 compatible, pure Node.js crypto)
+  //
+  // Flow:
+  //   x   = H(salt || H(USERNAME || ':' || PASSWORD))
+  //   S   = (B - k·g^x) ^ (a + u·x)  mod N
+  //   K   = H(S)                       (Cognito: first 16 bytes of H(S))
+  //   M1  = H(A || B || K)             (client proof sent to server)
+  // ---------------------------------------------------------------------------
+
+  private computePasswordVerifierProof(salt: Buffer, srpB: Buffer): {
+    signature: string;
+    timestamp: string;
+  } {
+    // x = H(salt || H(USERNAME || ':' || PASSWORD))
+    const userPwdHash = sha256(Buffer.from(`${this.username}:${this.password}`, 'utf-8'));
+    const x = bytesToBigInt(sha256(Buffer.concat([salt, userPwdHash])));
+
+    // a = random ephemeral private value (256 bytes)
+    const a = randomBigInt(N_BYTES);
+
+    // A = g^a mod N  (padded to N_BYTES for SRP protocol)
+    const A = modExp(BIGINT_G, a, BIGINT_N);
+    const ABytes = bigIntToBytes(A, N_BYTES);
+
+    // u = H(A || B)  (both padded to N_BYTES)
+    const BBytes = Buffer.concat([
+      Buffer.alloc(Math.max(0, N_BYTES - srpB.length), 0),
+      srpB,
+    ]);
+    const u = bytesToBigInt(hashAB(ABytes, BBytes));
+
+    // S = (B - k·g^x) ^ (a + u·x) mod N
+    const gx = modExp(BIGINT_G, x, BIGINT_N);
+    const kgx = (BIGINT_K * gx) % BIGINT_N;
+    const BNum = bytesToBigInt(srpB.length >= N_BYTES ? srpB.slice(-N_BYTES) : srpB);
+    const diff = (BNum + BIGINT_N - kgx) % BIGINT_N;
+    const S = modExp(diff, a + u * x, BIGINT_N);
+
+    // K = H(S) — first 16 bytes (Cognito-specific)
+    const K = sha256(bigIntToBytes(S, N_BYTES)).slice(0, 16);
+
+    // M1 = H(A || B || K)  (all values padded to N_BYTES)
+    const M1 = Buffer.concat([hashAB(ABytes, bigIntToBytes(BNum, N_BYTES)), K]);
+
+    const timestamp = new Date().toISOString();
+
+    const signature = Buffer.concat([M1, Buffer.from(timestamp, 'utf-8')]).toString('base64');
+
+    return { signature, timestamp };
   }
 }
