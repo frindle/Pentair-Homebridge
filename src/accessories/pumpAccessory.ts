@@ -246,6 +246,10 @@ export class PentairPumpAccessory {
     try {
       const status = await this.api.getDeviceStatus(this.deviceId);
 
+      this.platform.log.debug(
+        `Pump [${this.deviceId}] raw status: ${JSON.stringify(status)}`,
+      );
+
       // Determine which (if any) program is active.
       let runningProgram = 0;
       for (let p = 1; p <= PROGRAM_COUNT; p++) {

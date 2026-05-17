@@ -147,14 +147,23 @@ class PentairApi {
         }
         const url = `https://${settings_1.API_BASE_HOST}${path}`;
         this.log.debug(`PentairApi: ${method} ${url}`);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
         const fetchOptions = {
             method,
             headers: fetchHeaders,
+            signal: controller.signal,
         };
         if (bodyString) {
             fetchOptions.body = bodyString;
         }
-        const response = await fetch(url, fetchOptions);
+        let response;
+        try {
+            response = await fetch(url, fetchOptions);
+        }
+        finally {
+            clearTimeout(timeout);
+        }
         if (!response.ok) {
             const text = await response.text().catch(() => '');
             throw new Error(`PentairApi: ${method} ${path} → HTTP ${response.status}: ${text}`);

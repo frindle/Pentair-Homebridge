@@ -195,6 +195,7 @@ class PentairLightAccessory {
     async pollStatus() {
         try {
             const status = await this.api.getDeviceStatus(this.deviceId);
+            this.platform.log.debug(`Light [${this.deviceId}] raw status: ${JSON.stringify(status)}`);
             // Parse on/off state.
             const lseRaw = status['lse'];
             const isOn = lseRaw === '1' || lseRaw === 1 || lseRaw === true;
