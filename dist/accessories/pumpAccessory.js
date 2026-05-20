@@ -145,6 +145,8 @@ class PentairPumpAccessory {
         }
         const program = speedToProgram(speed);
         this.platform.log.info(`Pump [${this.deviceId}]: set speed ${speed}% → program ${program}`);
+        const prevProgram = this.state.program;
+        const prevActive = this.state.active;
         try {
             await this.startProgram(program);
             this.state.program = program;
@@ -152,6 +154,8 @@ class PentairPumpAccessory {
         }
         catch (err) {
             this.platform.log.error(`Pump [${this.deviceId}]: speed set failed`, err);
+            this.state.program = prevProgram;
+            this.state.active = prevActive;
         }
     }
     // ---------------------------------------------------------------------------
