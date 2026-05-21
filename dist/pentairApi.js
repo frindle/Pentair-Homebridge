@@ -58,29 +58,18 @@ class PentairApi {
      * @returns A flat key/value map of status fields.
      */
     async getDeviceStatus(deviceId) {
-        const response = await this.signedRequest('POST', settings_1.ENDPOINT_DEVICE_STATUS, { deviceId });
-        if (response && typeof response === 'object' && !Array.isArray(response)) {
-            const obj = response;
-            // Unwrap top-level "response" envelope if present.
-            const inner = (obj['response'] && typeof obj['response'] === 'object')
-                ? obj['response']
-                : obj;
-            // data may be an array (one element per device) or a plain object.
-            if (Array.isArray(inner['data'])) {
-                const arr = inner['data'];
-                if (arr.length > 0) {
-                    return arr[0];
-                }
-                this.log.warn(`PentairApi: device status returned empty data array for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
-                return {};
-            }
-            if (inner['data'] && typeof inner['data'] === 'object') {
-                return inner['data'];
-            }
-            this.log.warn(`PentairApi: device status unexpected shape for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
-            return inner;
+        // Probe multiple endpoint variants to find which one returns data.
+        const variants = [
+            { method: 'GET', path: `/device2/device2-service/user/device/${deviceId}` },
+            { method: 'GET', path: '/device2/device2-service/user/devices' },
+            { method: 'GET', path: settings_1.ENDPOINT_DEVICE_STATUS },
+            { method: 'POST', path: settings_1.ENDPOINT_DEVICE_STATUS, body: { deviceId } },
+            { method: 'POST', path: settings_1.ENDPOINT_DEVICE_STATUS, body: { serialNumber: deviceId } },
+        ];
+        for (const v of variants) {
+            const response = await this.signedRequest(v.method, v.path, v.body);
+            this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ${JSON.stringify(response)}`);
         }
-        this.log.warn(`PentairApi: unexpected shape from getDeviceStatus for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
         return {};
     }
     /**
