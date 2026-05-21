@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.2] - 2026-05-20
+
+### Fixed
+- **Authentication completely rewritten** to implement the full Cognito SRP (`USER_SRP_AUTH`) flow correctly — resolves `InvalidParameterException: USER_PASSWORD_AUTH flow not enabled for this client`:
+  - `modExp` was using `base ** exp % mod` — infeasible for 2048-bit exponents; replaced with square-and-multiply
+  - `InitiateAuth` was sending `PASSWORD` instead of `SRP_A` (client's ephemeral public key `g^a mod N`)
+  - `SALT` and `SRP_B` were decoded from base64; Cognito returns them as hex strings
+  - Key derivation now uses HKDF with `'Caldera Derived Key'` info bytes, matching `amazon-cognito-identity-js`
+  - Signature now uses `HMAC-SHA256(K, pool_name || userId || secret_block || timestamp)` per Cognito spec
+  - Timestamp now formatted as `"EEE MMM D HH:mm:ss UTC YYYY"` (Cognito-required), not ISO 8601
+  - `k` constant now computed with `padHex` (minimal two's-complement padding) to match Cognito's server-side value
+
+## [1.1.1] - 2026-05-20
+
+### Fixed
+- Fix corrupted `HEX_N` RFC 5054 2048-bit prime constant
+- Remove verbose debug dumps from `pollStatus`
+
 ## [1.1.0] - 2026-05-20
 
 ### Fixed

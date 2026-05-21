@@ -3,7 +3,7 @@
  * for the Pentair Cloud API.
  *
  * Authentication flow:
- *  1. SRP authentication via USER_PASSWORD_AUTH flow — pure Node.js crypto
+ *  1. SRP authentication via USER_SRP_AUTH flow — pure Node.js crypto
  *     (no amazon-cognito-identity-js) via @aws-sdk/client-cognito-identity-provider
  *     → IdToken + RefreshToken
  *  2. GetId + GetCredentialsForIdentity via Cognito Identity Pool
@@ -32,6 +32,5 @@ export declare class PentairAuth {
     private fetchTokens;
     private refreshTokens;
     private fetchCredentials;
-    private parseChallengeParams;
     private computePasswordVerifierProof;
 }

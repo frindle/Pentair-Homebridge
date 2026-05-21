@@ -3,7 +3,7 @@
  * for the Pentair Cloud API.
  *
  * Authentication flow:
- *  1. SRP authentication via USER_PASSWORD_AUTH flow — pure Node.js crypto
+ *  1. SRP authentication via USER_SRP_AUTH flow — pure Node.js crypto
  *     (no amazon-cognito-identity-js) via @aws-sdk/client-cognito-identity-provider
  *     → IdToken + RefreshToken
  *  2. GetId + GetCredentialsForIdentity via Cognito Identity Pool
@@ -13,7 +13,7 @@
  * with AWS Signature Version 4.
  */
 
-import { createHash, randomBytes } from 'crypto';
+import { createHash, createHmac, randomBytes } from 'crypto';
 import {
   CognitoIdentityClient,
   GetIdCommand,
@@ -30,6 +30,7 @@ import {
   COGNITO_CLIENT_ID,
   COGNITO_IDENTITY_POOL_ID,
   COGNITO_LOGIN_KEY,
+  COGNITO_USER_POOL_ID,
 } from './settings';
 
 /** AWS credential set returned by Cognito Identity Pool. */
@@ -68,7 +69,7 @@ const HEX_N =
 /** g: generator = 2 */
 const HEX_G = '02';
 
-/** Byte length of N (and all SRP values A, B, S) */
+/** Byte length of N used for the random ephemeral private key. */
 const N_BYTES = 256;
 
 // Verify HEX_N is exactly 512 hex chars (256 bytes) at module load time.
@@ -95,43 +96,40 @@ function bytesToBigInt(bytes: Buffer): bigint {
   return BigInt('0x' + bytes.toString('hex'));
 }
 
-function bigIntToBytes(n: bigint, byteLen: number): Buffer {
-  const hex = n.toString(16).padStart(byteLen * 2, '0');
-  return Buffer.from(hexToBytes(hex));
-}
-
 function sha256(data: Buffer): Buffer {
   return createHash('sha256').update(data).digest();
 }
 
-function sha256Hex(hexString: string): string {
-  return createHash('sha256')
-    .update(Buffer.from(hexToBytes(hexString)))
-    .digest()
-    .toString('hex');
-}
-
-/** Modular exponentiation: (base^exp) % mod */
-function modExp(base: bigint, exp: bigint, mod: bigint): bigint {
-  return base ** exp % mod;
-}
-
 /**
- * H(A || B) where A and B are left-padded to N_BYTES (256 bytes) before
- * concatenation and hashing.
+ * Pad a bigint to a minimal even-length two's-complement hex string.
+ * Matches the padHex() used by amazon-cognito-identity-js so that k, u, and
+ * HKDF inputs agree with what Cognito's server-side SRP implementation expects.
  */
-function hashAB(a: Buffer, b: Buffer): Buffer {
-  const padA = Buffer.alloc(N_BYTES - a.length).fill(0);
-  const padB = Buffer.alloc(N_BYTES - b.length).fill(0);
-  return sha256(Buffer.concat([padA, a, padB, b]));
+function padHex(n: bigint): string {
+  let hex = n.toString(16);
+  if (hex.length % 2 !== 0) hex = '0' + hex;
+  if ('89abcdef'.includes(hex[0])) hex = '00' + hex;
+  return hex;
+}
+
+/** Square-and-multiply modular exponentiation — required for 2048-bit SRP values. */
+function modExp(base: bigint, exp: bigint, mod: bigint): bigint {
+  let result = 1n;
+  base = base % mod;
+  while (exp > 0n) {
+    if (exp & 1n) result = (result * base) % mod;
+    exp >>= 1n;
+    base = (base * base) % mod;
+  }
+  return result;
 }
 
 /** Random bigint in range [1, N-1] from cryptographically secure random bytes. */
 function randomBigInt(byteLen: number): bigint {
   const bytes = randomBytes(byteLen);
   const n = bytesToBigInt(bytes);
-  const bigIntNMinus1 = BIGINT_N - BigInt(1);
-  return (n % bigIntNMinus1) + BigInt(1);
+  const bigIntNMinus1 = BIGINT_N - 1n;
+  return (n % bigIntNMinus1) + 1n;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,9 +139,13 @@ function randomBigInt(byteLen: number): bigint {
 const BIGINT_G = BigInt('0x' + HEX_G);
 const BIGINT_N = BigInt('0x' + HEX_N);
 
-/** k = H(N || g) where N||g is the 257-byte concatenation of N (padded) and g */
-const BIGINT_K = BigInt(
-  '0x' + sha256Hex(HEX_N + HEX_G),
+/**
+ * k = H(padHex(N) || padHex(g))
+ * Uses the same minimal two's-complement padding as amazon-cognito-identity-js
+ * so it matches Cognito's server-side k value.
+ */
+const BIGINT_K = bytesToBigInt(
+  sha256(Buffer.from(hexToBytes(padHex(BIGINT_N) + padHex(BIGINT_G)))),
 );
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,19 @@ function jwtExpiry(token: string): number {
   } catch {
     return 0;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Cognito timestamp (must match Cognito's expected format exactly)
+// ---------------------------------------------------------------------------
+
+const UTC_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const UTC_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function cognitoTimestamp(): string {
+  const now = new Date();
+  const timeStr = now.toUTCString().split(' ')[4]; // "HH:mm:ss"
+  return `${UTC_DAYS[now.getUTCDay()]} ${UTC_MONTHS[now.getUTCMonth()]} ${now.getUTCDate()} ${timeStr} UTC ${now.getUTCFullYear()}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -242,38 +257,48 @@ export class PentairAuth {
   // ---------------------------------------------------------------------------
 
   private async fetchTokens(): Promise<{ idToken: string; refreshToken: string }> {
+    // Generate the ephemeral SRP keypair up front — A must be sent in InitiateAuth
+    // and the same private key a must later be used to compute the proof.
+    const a = randomBigInt(N_BYTES);
+    const A = modExp(BIGINT_G, a, BIGINT_N);
+
     const initiateResp = await this.idpClient.send(
       new InitiateAuthCommand({
-        AuthFlow: 'USER_PASSWORD_AUTH',
+        AuthFlow: 'USER_SRP_AUTH',
         AuthParameters: {
           USERNAME: this.username,
-          PASSWORD: this.password,
+          SRP_A: A.toString(16),
         },
         ClientId: COGNITO_CLIENT_ID,
       }),
     );
 
-    if (!initiateResp.ChallengeName || initiateResp.ChallengeName === 'SOFTWARE_TOKEN_MFA') {
+    if (initiateResp.ChallengeName !== 'PASSWORD_VERIFIER') {
       if (initiateResp.AuthenticationResult) {
         return {
           idToken: initiateResp.AuthenticationResult.IdToken!,
           refreshToken: initiateResp.AuthenticationResult.RefreshToken!,
         };
       }
-      throw new Error('PentairAuth: unexpected response with no challenge and no tokens');
-    }
-
-    if (initiateResp.ChallengeName !== 'PASSWORD_VERIFIER') {
-      throw new Error(`PentairAuth: unsupported challenge: ${initiateResp.ChallengeName}`);
+      throw new Error(`PentairAuth: unexpected challenge: ${initiateResp.ChallengeName ?? 'none'}`);
     }
 
     if (!initiateResp.Session) {
       throw new Error('PentairAuth: PASSWORD_VERIFIER challenge missing session');
     }
 
-    const { salt, srpB } = this.parseChallengeParams(initiateResp.ChallengeParameters!);
+    const params = initiateResp.ChallengeParameters!;
+    // SALT and SRP_B arrive as hex strings from Cognito, not base64.
+    const salt = Buffer.from(hexToBytes(params.SALT!));
+    const srpB = Buffer.from(hexToBytes(params.SRP_B!));
+    const secretBlock = params.SECRET_BLOCK!;
+    // USER_ID_FOR_SRP is the canonical username Cognito used for verifier lookup;
+    // may differ from this.username when signing in with an email/phone alias.
+    const userId = params.USER_ID_FOR_SRP ?? this.username;
 
-    const { signature, timestamp } = this.computePasswordVerifierProof(salt, srpB);
+    const { signature, timestamp } = this.computePasswordVerifierProof(
+      a, A, salt, srpB, secretBlock, userId,
+    );
 
     const challengeResp = await this.idpClient.send(
       new RespondToAuthChallengeCommand({
@@ -282,9 +307,9 @@ export class PentairAuth {
         ClientId: COGNITO_CLIENT_ID,
         ChallengeResponses: {
           PASSWORD_CLAIM_SIGNATURE: signature,
-          PASSWORD_CLAIM_SECRET_BLOCK: initiateResp.ChallengeParameters!.SECRET_BLOCK,
+          PASSWORD_CLAIM_SECRET_BLOCK: secretBlock,
           TIMESTAMP: timestamp,
-          USERNAME: this.username,
+          USERNAME: userId,
         },
       }),
     );
@@ -366,66 +391,67 @@ export class PentairAuth {
   }
 
   // ---------------------------------------------------------------------------
-  // SRP challenge parameter parsing
-  // ---------------------------------------------------------------------------
-
-  private parseChallengeParams(params: Record<string, string>): {
-    salt: Buffer;
-    srpB: Buffer;
-  } {
-    const salt = Buffer.from(params.SALT!, 'base64');
-    const srpB = Buffer.from(params.SRP_B!, 'base64');
-    return { salt, srpB };
-  }
-
-  // ---------------------------------------------------------------------------
-  // SRP-6a password proof (RFC 5054 compatible, pure Node.js crypto)
+  // SRP-6a password proof (Cognito-specific, NOT standard RFC 5054 M1)
   //
-  // Flow:
-  //   x   = H(salt || H(USERNAME || ':' || PASSWORD))
+  // Cognito's server validates:
+  //   u   = H(padHex(A) || padHex(B))
+  //   x   = H(salt || H(pool_name + userId + ':' + password))
   //   S   = (B - k·g^x) ^ (a + u·x)  mod N
-  //   K   = H(S)                       (Cognito: first 16 bytes of H(S))
-  //   M1  = H(A || B || K)             (client proof sent to server)
+  //   K   = HKDF(ikm=padHex(S), salt=padHex(u), info='Caldera Derived Key\x01')[:16]
+  //   sig = base64(HMAC-SHA256(K, pool_name || userId || secret_block || timestamp))
+  //
+  // All padHex() calls use minimal two's-complement zero-padding, matching
+  // amazon-cognito-identity-js so that both sides agree on the bit representation.
   // ---------------------------------------------------------------------------
 
-  private computePasswordVerifierProof(salt: Buffer, srpB: Buffer): {
-    signature: string;
-    timestamp: string;
-  } {
-    // x = H(salt || H(USERNAME || ':' || PASSWORD))
-    const userPwdHash = sha256(Buffer.from(`${this.username}:${this.password}`, 'utf-8'));
-    const x = bytesToBigInt(sha256(Buffer.concat([salt, userPwdHash])));
+  private computePasswordVerifierProof(
+    a: bigint,
+    A: bigint,
+    salt: Buffer,
+    srpB: Buffer,
+    secretBlock: string,
+    userId: string,
+  ): { signature: string; timestamp: string } {
+    const poolName = COGNITO_USER_POOL_ID.split('_')[1];
+    const BNum = bytesToBigInt(srpB);
 
-    // a = random ephemeral private value (256 bytes)
-    const a = randomBigInt(N_BYTES);
+    // u = H(padHex(A) || padHex(B))
+    const u = bytesToBigInt(
+      sha256(Buffer.from(hexToBytes(padHex(A) + padHex(BNum)))),
+    );
 
-    // A = g^a mod N  (padded to N_BYTES for SRP protocol)
-    const A = modExp(BIGINT_G, a, BIGINT_N);
-    const ABytes = bigIntToBytes(A, N_BYTES);
+    // x = H(salt || H(pool_name + userId + ':' + password))
+    const innerHash = sha256(Buffer.from(`${poolName}${userId}:${this.password}`, 'utf-8'));
+    const x = bytesToBigInt(sha256(Buffer.concat([salt, innerHash])));
 
-    // u = H(A || B)  (both padded to N_BYTES)
-    const BBytes = Buffer.concat([
-      Buffer.alloc(Math.max(0, N_BYTES - srpB.length), 0),
-      srpB,
-    ]);
-    const u = bytesToBigInt(hashAB(ABytes, BBytes));
-
-    // S = (B - k·g^x) ^ (a + u·x) mod N
+    // S = (B - k·g^x)^(a + u·x) mod N
     const gx = modExp(BIGINT_G, x, BIGINT_N);
     const kgx = (BIGINT_K * gx) % BIGINT_N;
-    const BNum = bytesToBigInt(srpB.length >= N_BYTES ? srpB.slice(-N_BYTES) : srpB);
     const diff = (BNum + BIGINT_N - kgx) % BIGINT_N;
     const S = modExp(diff, a + u * x, BIGINT_N);
 
-    // K = H(S) — first 16 bytes (Cognito-specific)
-    const K = sha256(bigIntToBytes(S, N_BYTES)).slice(0, 16);
+    // K via simplified 2-round HKDF matching amazon-cognito-identity-js:
+    //   prk = HMAC-SHA256(key=padHex(u), data=padHex(S))
+    //   K   = HMAC-SHA256(key=prk, data=info)[:16]
+    const SBytes = Buffer.from(hexToBytes(padHex(S)));
+    const uBytes = Buffer.from(hexToBytes(padHex(u)));
+    const prk = createHmac('sha256', uBytes).update(SBytes).digest();
+    const info = Buffer.concat([
+      Buffer.from('Caldera Derived Key', 'utf-8'),
+      Buffer.from([0x01]),
+    ]);
+    const K = createHmac('sha256', prk).update(info).digest().slice(0, 16);
 
-    // M1 = H(A || B || K)  (all values padded to N_BYTES)
-    const M1 = Buffer.concat([hashAB(ABytes, bigIntToBytes(BNum, N_BYTES)), K]);
+    const timestamp = cognitoTimestamp();
 
-    const timestamp = new Date().toISOString();
-
-    const signature = Buffer.concat([M1, Buffer.from(timestamp, 'utf-8')]).toString('base64');
+    // sig = base64(HMAC-SHA256(K, pool_name || userId || secret_block_bytes || timestamp))
+    const msg = Buffer.concat([
+      Buffer.from(poolName, 'utf-8'),
+      Buffer.from(userId, 'utf-8'),
+      Buffer.from(secretBlock, 'base64'),
+      Buffer.from(timestamp, 'utf-8'),
+    ]);
+    const signature = createHmac('sha256', K).update(msg).digest('base64');
 
     return { signature, timestamp };
   }

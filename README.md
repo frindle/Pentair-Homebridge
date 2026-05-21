@@ -94,6 +94,10 @@ homebridge -D
 
 Raw device status is logged at debug level in both pump and light accessories, which helps identify all status fields available from your device.
 
+### Failed to authenticate: USER_PASSWORD_AUTH flow not enabled
+
+Upgrade to **v1.1.2** or later. Versions before 1.1.2 used an authentication flow that the Pentair Cognito app client does not enable. v1.1.2 rewrites the auth layer to use the full SRP (`USER_SRP_AUTH`) flow.
+
 ### Siri Requests hang or timeout
 
 v1.0.5+ includes a 10-second timeout on all API requests. If requests still time out, check your network connection to `api.pentair.cloud`.
