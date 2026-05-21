@@ -283,10 +283,6 @@ export class PentairAuth {
       throw new Error(`PentairAuth: unexpected challenge: ${initiateResp.ChallengeName ?? 'none'}`);
     }
 
-    if (!initiateResp.Session) {
-      throw new Error('PentairAuth: PASSWORD_VERIFIER challenge missing session');
-    }
-
     const params = initiateResp.ChallengeParameters!;
     // SALT and SRP_B arrive as hex strings from Cognito, not base64.
     const salt = Buffer.from(hexToBytes(params.SALT!));

@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.3] - 2026-05-20
+
+### Fixed
+- Remove erroneous `Session` guard in `fetchTokens` — Cognito does not return a `Session` field in `InitiateAuth` responses for the `USER_SRP_AUTH` flow, causing authentication to always fail with "PASSWORD_VERIFIER challenge missing session"
+
 ## [1.1.2] - 2026-05-20
 
 ### Fixed
