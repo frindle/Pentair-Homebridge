@@ -87,12 +87,14 @@ export class PentairApi {
    */
   async getDeviceStatus(deviceId: string): Promise<DeviceStatus> {
     // Probe multiple endpoint variants to find which one returns data.
-    const variants: Array<{ method: string; path: string; body?: Record<string, unknown> }> = [
-      { method: 'GET',  path: `/device2/device2-service/user/device/${deviceId}` },
-      { method: 'GET',  path: '/device2/device2-service/user/devices' },
-      { method: 'GET',  path: ENDPOINT_DEVICE_STATUS },
+    const variants: Array<{ method: string; path: string; body?: Record<string, unknown> | unknown[] }> = [
       { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { deviceId } },
       { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { serialNumber: deviceId } },
+      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { deviceIds: [deviceId] } },
+      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { serialNumbers: [deviceId] } },
+      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: [deviceId] },
+      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { id: deviceId } },
+      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { ids: [deviceId] } },
     ];
 
     for (const v of variants) {
