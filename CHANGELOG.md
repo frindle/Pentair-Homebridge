@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.5] - 2026-05-20
+
+### Fixed
+- Fix remaining SRP math bugs causing `NotAuthorizedException: Incorrect username or password`:
+  - `k` constant reverted to `H(padHex(N) || padHex(g))` = SHA256(258 bytes) — matches `amazon-cognito-identity-js` exactly; the 257-byte version used in v1.1.4 was wrong
+  - `x` inner hash now applies `padHex` to the SHA256 of `(poolName + userId + ':' + password)` before concatenation, matching the library's `hash()` method which returns `padHex(BigInteger.fromHex(SHA256_hex(str)))` and can produce 66-char hex when the hash's first nibble ≥ 8
+
 ## [1.1.4] - 2026-05-20
 
 ### Fixed

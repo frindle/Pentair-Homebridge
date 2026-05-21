@@ -94,12 +94,12 @@ function randomBigInt(byteLen) {
 const BIGINT_G = BigInt('0x' + HEX_G);
 const BIGINT_N = BigInt('0x' + HEX_N);
 /**
- * k = H(N_hex || g_hex) where N_hex is the raw 512-char constant and g_hex = "02".
- * Matches amazon-cognito-identity-js: N.toString(16)+"2" → 513-char hex → 257 bytes
- * (Math.ceil(513/2)), last byte = 0x02. Identical to bytes_of(HEX_N + HEX_G).
- * Using padHex(N) would prepend an extra 0x00 byte and produce a different hash.
+ * k = H(padHex(N) || padHex(g))  — matches amazon-cognito-identity-js exactly:
+ *   this.k = BigInteger.fromHex(this.hexHash(this.padHex(this.N) + this.padHex(this.g)))
+ * padHex(N) = '00' + HEX_N (514 chars) since N's first nibble 'A' >= '8'.
+ * padHex(g=2) = '02' (2 chars). Total input: 516 chars = 258 bytes.
  */
-const BIGINT_K = bytesToBigInt(sha256(Buffer.from(hexToBytes(HEX_N + HEX_G))));
+const BIGINT_K = bytesToBigInt(sha256(Buffer.from(hexToBytes(padHex(BIGINT_N) + padHex(BIGINT_G)))));
 // ---------------------------------------------------------------------------
 // JWT helper (expiry-only, no signature verification needed)
 // ---------------------------------------------------------------------------
@@ -302,12 +302,12 @@ class PentairAuth {
         const BNum = BigInt('0x' + srpBHex);
         // u = H(padHex(A) || padHex(B))  — matches amazon-cognito-identity-js hexHash(padHex(A)+padHex(B))
         const u = bytesToBigInt(sha256(Buffer.from(hexToBytes(padHex(A) + padHex(BNum)))));
-        // x = H(padHex(salt) || H_hex(pool_name + userId + ':' + password))
-        // amazon-cognito-identity-js: hexHash(padHex(salt_bigint) + sha256_hex(poolName+userId+':'+pw))
-        // padHex(salt) adds a leading 0x00 byte when salt's MSB nibble >= 8 (~50% of calls).
-        // The inner hash is concatenated as its 64-char hex string, then the whole thing
-        // is decoded from hex to bytes before the outer SHA256.
-        const innerHashHex = sha256(Buffer.from(`${poolName}${userId}:${this.password}`, 'utf-8')).toString('hex');
+        // x = H(padHex(salt) || padHex(H(pool_name + userId + ':' + password)))
+        // amazon-cognito-identity-js hash(str) = padHex(BigInteger.fromHex(SHA256_hex(str)))
+        // which adds a leading '00' byte when the hash's first nibble >= 8 (~50% of calls).
+        // Both the salt and the inner hash must go through padHex before concatenation.
+        const innerHash = sha256(Buffer.from(`${poolName}${userId}:${this.password}`, 'utf-8'));
+        const innerHashHex = padHex(bytesToBigInt(innerHash));
         const x = bytesToBigInt(sha256(Buffer.from(hexToBytes(padHex(BigInt('0x' + saltHex)) + innerHashHex))));
         // S = (B - k·g^x)^(a + u·x) mod N
         const gx = modExp(BIGINT_G, x, BIGINT_N);
