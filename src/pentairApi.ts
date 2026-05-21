@@ -89,7 +89,7 @@ export class PentairApi {
     const response = await this.signedRequest(
       'POST',
       ENDPOINT_DEVICE_STATUS,
-      { serialNumber: deviceId },
+      { deviceId },
     );
 
     if (response && typeof response === 'object' && !Array.isArray(response)) {

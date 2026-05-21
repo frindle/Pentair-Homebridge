@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.8] - 2026-05-20
+
+### Fixed
+- Fix device status request body: was sending `serialNumber` but API expects `deviceId` — caused API to return empty `data[]` despite a success code, so device state was never populated
+
 ## [1.1.7] - 2026-05-20
 
 ### Changed

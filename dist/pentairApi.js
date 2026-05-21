@@ -58,7 +58,7 @@ class PentairApi {
      * @returns A flat key/value map of status fields.
      */
     async getDeviceStatus(deviceId) {
-        const response = await this.signedRequest('POST', settings_1.ENDPOINT_DEVICE_STATUS, { serialNumber: deviceId });
+        const response = await this.signedRequest('POST', settings_1.ENDPOINT_DEVICE_STATUS, { deviceId });
         if (response && typeof response === 'object' && !Array.isArray(response)) {
             const obj = response;
             // Unwrap top-level "response" envelope if present.
