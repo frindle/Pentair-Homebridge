@@ -140,12 +140,13 @@ const BIGINT_G = BigInt('0x' + HEX_G);
 const BIGINT_N = BigInt('0x' + HEX_N);
 
 /**
- * k = H(padHex(N) || padHex(g))
- * Uses the same minimal two's-complement padding as amazon-cognito-identity-js
- * so it matches Cognito's server-side k value.
+ * k = H(N_hex || g_hex) where N_hex is the raw 512-char constant and g_hex = "02".
+ * Matches amazon-cognito-identity-js: N.toString(16)+"2" → 513-char hex → 257 bytes
+ * (Math.ceil(513/2)), last byte = 0x02. Identical to bytes_of(HEX_N + HEX_G).
+ * Using padHex(N) would prepend an extra 0x00 byte and produce a different hash.
  */
 const BIGINT_K = bytesToBigInt(
-  sha256(Buffer.from(hexToBytes(padHex(BIGINT_N) + padHex(BIGINT_G)))),
+  sha256(Buffer.from(hexToBytes(HEX_N + HEX_G))),
 );
 
 // ---------------------------------------------------------------------------
@@ -285,15 +286,15 @@ export class PentairAuth {
 
     const params = initiateResp.ChallengeParameters!;
     // SALT and SRP_B arrive as hex strings from Cognito, not base64.
-    const salt = Buffer.from(hexToBytes(params.SALT!));
-    const srpB = Buffer.from(hexToBytes(params.SRP_B!));
+    const saltHex = params.SALT!;
+    const srpBHex = params.SRP_B!;
     const secretBlock = params.SECRET_BLOCK!;
     // USER_ID_FOR_SRP is the canonical username Cognito used for verifier lookup;
     // may differ from this.username when signing in with an email/phone alias.
     const userId = params.USER_ID_FOR_SRP ?? this.username;
 
     const { signature, timestamp } = this.computePasswordVerifierProof(
-      a, A, salt, srpB, secretBlock, userId,
+      a, A, saltHex, srpBHex, secretBlock, userId,
     );
 
     const challengeResp = await this.idpClient.send(
@@ -403,22 +404,26 @@ export class PentairAuth {
   private computePasswordVerifierProof(
     a: bigint,
     A: bigint,
-    salt: Buffer,
-    srpB: Buffer,
+    saltHex: string,
+    srpBHex: string,
     secretBlock: string,
     userId: string,
   ): { signature: string; timestamp: string } {
     const poolName = COGNITO_USER_POOL_ID.split('_')[1];
-    const BNum = bytesToBigInt(srpB);
+    const BNum = BigInt('0x' + srpBHex);
 
-    // u = H(padHex(A) || padHex(B))
+    // u = H(padHex(A) || padHex(B))  — matches amazon-cognito-identity-js hexHash(padHex(A)+padHex(B))
     const u = bytesToBigInt(
       sha256(Buffer.from(hexToBytes(padHex(A) + padHex(BNum)))),
     );
 
-    // x = H(salt || H(pool_name + userId + ':' + password))
-    const innerHash = sha256(Buffer.from(`${poolName}${userId}:${this.password}`, 'utf-8'));
-    const x = bytesToBigInt(sha256(Buffer.concat([salt, innerHash])));
+    // x = H(padHex(salt) || H_hex(pool_name + userId + ':' + password))
+    // amazon-cognito-identity-js: hexHash(padHex(salt_bigint) + sha256_hex(poolName+userId+':'+pw))
+    // padHex(salt) adds a leading 0x00 byte when salt's MSB nibble >= 8 (~50% of calls).
+    // The inner hash is concatenated as its 64-char hex string, then the whole thing
+    // is decoded from hex to bytes before the outer SHA256.
+    const innerHashHex = sha256(Buffer.from(`${poolName}${userId}:${this.password}`, 'utf-8')).toString('hex');
+    const x = bytesToBigInt(sha256(Buffer.from(hexToBytes(padHex(BigInt('0x' + saltHex)) + innerHashHex))));
 
     // S = (B - k·g^x)^(a + u·x) mod N
     const gx = modExp(BIGINT_G, x, BIGINT_N);

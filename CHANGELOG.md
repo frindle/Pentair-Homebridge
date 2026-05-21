@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.4] - 2026-05-20
+
+### Fixed
+- Fix SRP math to match amazon-cognito-identity-js exactly, resolving `NotAuthorizedException: Incorrect username or password`:
+  - `k` constant was using `padHex(N)` (adds a leading `0x00` byte since N's MSB ≥ 0x80), producing a different SHA-256 than Cognito expects; reverted to `SHA256(bytes_of(HEX_N + "02"))` which matches the library's 257-byte input
+  - `x` computation was using raw SALT bytes; Cognito's server applies `padHex` to SALT (adds leading zero byte when SALT's first nibble ≥ 8) before hashing — missing this caused wrong `x` ~50% of the time
+  - Inner hash in `x` is now concatenated as its 64-char hex string before decoding to bytes, matching `hexHash(padHex(salt) + sha256hex(poolName+userId+':'+pw))`
+
 ## [1.1.3] - 2026-05-20
 
 ### Fixed
