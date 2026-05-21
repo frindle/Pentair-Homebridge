@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.6] - 2026-05-20
+
+### Fixed
+- **Revert to `amazon-cognito-identity-js` for SRP authentication** — the custom pure-Node SRP implementation introduced in v1.0.9 has never shipped in a working state; every v1.1.x release was an attempt to fix it. The library handles the SRP math correctly by definition and was the last confirmed-working auth approach (v1.0.x era)
+- Remove unused `@aws-sdk/client-cognito-identity-provider` dependency (was only needed by the custom SRP code)
+
 ## [1.1.5] - 2026-05-20
 
 ### Fixed

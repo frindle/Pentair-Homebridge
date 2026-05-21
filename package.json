@@ -1,6 +1,6 @@
 {
   "name": "homebridge-pentair-cloud",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Homebridge plugin to control Pentair pool pump and IntelliBrite lights via the Pentair Home cloud API",
   "license": "MIT",
   "main": "dist/index.js",
@@ -30,20 +30,20 @@
     "homebridge": ">=1.6.0"
   },
   "devDependencies": {
+    "@types/node": "^18.0.0",
     "homebridge": ">=1.6.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^18.0.0"
+    "typescript": "^5.0.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/frindle/Pentair-Homebridge"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity": "^3.0.0",
-    "@aws-sdk/client-cognito-identity-provider": "^3.0.0",
-    "@aws-sdk/signature-v4": "^3.0.0",
     "@aws-crypto/sha256-js": "^5.0.0",
-    "@smithy/protocol-http": "^4.0.0"
+    "@aws-sdk/client-cognito-identity": "^3.0.0",
+    "@aws-sdk/signature-v4": "^3.0.0",
+    "@smithy/protocol-http": "^4.0.0",
+    "amazon-cognito-identity-js": "^6.3.16"
   },
   "changelog": "CHANGELOG.md",
   "homebridge": {
