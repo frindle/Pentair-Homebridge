@@ -71,15 +71,16 @@ class PentairApi {
                 if (arr.length > 0) {
                     return arr[0];
                 }
-                this.log.warn(`PentairApi: device status returned empty data array for ${deviceId}`);
+                this.log.warn(`PentairApi: device status returned empty data array for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
                 return {};
             }
             if (inner['data'] && typeof inner['data'] === 'object') {
                 return inner['data'];
             }
+            this.log.warn(`PentairApi: device status unexpected shape for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
             return inner;
         }
-        this.log.warn('PentairApi: unexpected shape from getDeviceStatus');
+        this.log.warn(`PentairApi: unexpected shape from getDeviceStatus for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
         return {};
     }
     /**

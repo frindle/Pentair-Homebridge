@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.7] - 2026-05-20
+
+### Changed
+- Log full raw API response when device status returns empty or unexpected shape — needed to identify correct status field names for IF31 and PLC1
+
 ## [1.1.6] - 2026-05-20
 
 ### Fixed

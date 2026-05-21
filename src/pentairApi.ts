@@ -106,7 +106,7 @@ export class PentairApi {
         if (arr.length > 0) {
           return arr[0] as DeviceStatus;
         }
-        this.log.warn(`PentairApi: device status returned empty data array for ${deviceId}`);
+        this.log.warn(`PentairApi: device status returned empty data array for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
         return {};
       }
 
@@ -114,10 +114,11 @@ export class PentairApi {
         return inner['data'] as DeviceStatus;
       }
 
+      this.log.warn(`PentairApi: device status unexpected shape for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
       return inner as DeviceStatus;
     }
 
-    this.log.warn('PentairApi: unexpected shape from getDeviceStatus');
+    this.log.warn(`PentairApi: unexpected shape from getDeviceStatus for ${deviceId}. Raw response: ${JSON.stringify(response)}`);
     return {};
   }
 
