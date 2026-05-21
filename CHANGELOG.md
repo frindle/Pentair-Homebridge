@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.10] - 2026-05-20
+
+### Fixed
+- Probe loop now catches per-variant errors so all 5 endpoint variants are tried even when earlier ones return 404
+
 ## [1.1.9] - 2026-05-20
 
 ### Changed

@@ -96,8 +96,12 @@ export class PentairApi {
     ];
 
     for (const v of variants) {
-      const response = await this.signedRequest(v.method, v.path, v.body);
-      this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ${JSON.stringify(response)}`);
+      try {
+        const response = await this.signedRequest(v.method, v.path, v.body);
+        this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ${JSON.stringify(response)}`);
+      } catch (err) {
+        this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ERROR ${(err as Error).message}`);
+      }
     }
 
     return {};
