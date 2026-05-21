@@ -86,29 +86,39 @@ export class PentairApi {
    * @returns A flat key/value map of status fields.
    */
   async getDeviceStatus(deviceId: string): Promise<DeviceStatus> {
-    const raw = await this.signedRequest('POST', ENDPOINT_DEVICE_STATUS, { deviceId });
+    const bodies: Array<[string, unknown]> = [
+      ['deviceId',               { deviceId }],
+      ['serialNumber',           { serialNumber: deviceId }],
+      ['deviceIds[]',            { deviceIds: [deviceId] }],
+      ['serialNumbers[]',        { serialNumbers: [deviceId] }],
+      ['bare[]',                 [deviceId]],
+      ['id',                     { id: deviceId }],
+      ['ids[]',                  { ids: [deviceId] }],
+    ];
 
-    // Response shape: { response: { data: [{ fields: { key: { value: ... } } }], code: "..." } }
-    type FieldEntry = { value: string | number | boolean | null };
-    const envelope = (raw as Record<string, unknown>)?.['response'] as Record<string, unknown> | undefined;
-    const data = Array.isArray(envelope?.['data']) ? (envelope!['data'] as Record<string, unknown>[]) : [];
-
-    if (data.length === 0) {
-      this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) returned empty data`);
-      return {};
+    for (const [label, body] of bodies) {
+      try {
+        const raw = await this.signedRequest('POST', ENDPOINT_DEVICE_STATUS, body);
+        type FieldEntry = { value: string | number | boolean | null };
+        type DeviceEntry = { fields?: Record<string, FieldEntry> };
+        type Envelope = { data?: DeviceEntry[] };
+        const envelope = (raw as { response?: Envelope })?.response;
+        const data = envelope?.data ?? [];
+        this.log.warn(`PentairApi probe body=${label}: data.length=${data.length}`);
+        if (data.length > 0 && data[0].fields) {
+          const status: DeviceStatus = {};
+          for (const [key, field] of Object.entries(data[0].fields!)) {
+            status[key] = field.value;
+          }
+          return status;
+        }
+      } catch (err) {
+        this.log.warn(`PentairApi probe body=${label}: ERROR ${(err as Error).message}`);
+      }
     }
 
-    const fields = data[0]['fields'] as Record<string, FieldEntry> | undefined;
-    if (!fields) {
-      this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) has no fields`);
-      return {};
-    }
-
-    const status: DeviceStatus = {};
-    for (const [key, field] of Object.entries(fields)) {
-      status[key] = field.value;
-    }
-    return status;
+    this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) — no probe returned data`);
+    return {};
   }
 
   /**

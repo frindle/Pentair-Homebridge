@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.13] - 2026-05-21
+
+### Changed
+- Re-probe all 7 body variants but now log `body=<label> data.length=<N>` per attempt so we can identify which key actually returns data; first variant with non-empty data wins and is returned
+
 ## [1.1.12] - 2026-05-21
 
 ### Fixed
