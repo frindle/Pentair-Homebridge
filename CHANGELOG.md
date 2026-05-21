@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.12] - 2026-05-21
+
+### Fixed
+- `getDeviceStatus`: parse real device data from `POST /device2/device2-service/user/device` — response shape is `response.data[0].fields`, each field flattened to `key → value`
+- Pump polling: replaced broken `zp${p}e13` ("program exists") loop with `s14` (Active Program Number) — was always showing pump as active
+- Light polling: replaced non-existent `lse`/`lco` fields with `d13` (On/Off) and `d1` (Light Mode/Color)
+- Light send commands: updated `lse`/`lco` → `d13`/`d1` to match PLC1 v2 API field names
+- `PentairColor` enum: corrected values to match PLC1 v2 API (1=SAM, 2=Party, 3=Romance, 4=Caribbean, 5=American, 6=Sunset, 7=Royal, 8=Blue, 9=Green, 10=Red, 11=White, 12=Magenta)
+
 ## [1.1.11] - 2026-05-20
 
 ### Changed

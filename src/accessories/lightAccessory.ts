@@ -36,45 +36,44 @@ export interface LightConfig {
   name: string;
 }
 
-/** All Pentair IntelliBrite color indices with their semantic names. */
+/**
+ * Pentair PLC1 v2 API color indices (field d1).
+ * Values match what the device reports and what sendCommand should send.
+ */
 export const enum PentairColor {
-  White     = 0,
-  Magenta   = 1,
-  Blue      = 2,
-  Green     = 3,
-  Red       = 4,
-  Party     = 5,
-  Romance   = 6,
-  Caribbean = 7,
-  American  = 8,
-  Sunset    = 9,
+  SAM       = 1,
+  Party     = 2,
+  Romance   = 3,
+  Caribbean = 4,
+  American  = 5,
+  Sunset    = 6,
+  Royal     = 7,
+  Blue      = 8,
+  Green     = 9,
+  Red       = 10,
+  White     = 11,
+  Magenta   = 12,
 }
 
-/**
- * Representative hue values used when HomeKit asks for the current color.
- * These are midpoints of each range that maps back to the given Pentair color.
- */
-const COLOR_TO_HUE: Record<PentairColor, number> = {
-  [PentairColor.White]:     0,    // achromatic – saturation will be 0
-  [PentairColor.Magenta]: 315,
-  [PentairColor.Blue]:    230,
-  [PentairColor.Green]:    100,
-  [PentairColor.Red]:       10,
-  [PentairColor.Party]:     40,
+/** Representative HomeKit hue for each Pentair color index. */
+const COLOR_TO_HUE: Record<number, number> = {
+  [PentairColor.SAM]:       0,    // show mode — map to red as placeholder
+  [PentairColor.Party]:    40,
   [PentairColor.Romance]: 275,
   [PentairColor.Caribbean]: 175,
-  [PentairColor.American]:  210, // treated as blue-ish when mapping back
-  [PentairColor.Sunset]:    25,  // warm orange-red
+  [PentairColor.American]: 210,
+  [PentairColor.Sunset]:   25,
+  [PentairColor.Royal]:   255,
+  [PentairColor.Blue]:    230,
+  [PentairColor.Green]:   100,
+  [PentairColor.Red]:      10,
+  [PentairColor.White]:     0,   // saturation 0
+  [PentairColor.Magenta]: 315,
 };
 
-/**
- * Converts a HomeKit Hue (0–360) and Saturation (0–100) to a Pentair color
- * index.
- */
 function hueToColorIndex(hue: number, saturation: number): PentairColor {
   if (saturation < 20) return PentairColor.White;
 
-  // Normalise hue to [0, 360)
   const h = ((hue % 360) + 360) % 360;
 
   if (h <= 20 || h >= 340)   return PentairColor.Red;
@@ -172,7 +171,7 @@ export class PentairLightAccessory {
     const on = value as boolean;
     this.platform.log.info(`Light [${this.deviceId}]: set on → ${on}`);
     try {
-      await this.api.sendCommand(this.deviceId, { lse: on ? '1' : '0' });
+      await this.api.sendCommand(this.deviceId, { d13: on ? '1' : '0' });
     } catch (err) {
       this.platform.log.error(`Light [${this.deviceId}]: on/off set failed`, err);
     }
@@ -231,7 +230,7 @@ export class PentairLightAccessory {
     );
 
     await this.api.sendCommand(this.deviceId, {
-      lco: String(colorIndex),
+      d1: String(colorIndex),
     });
 
     this.state.colorIndex = colorIndex;
@@ -256,17 +255,16 @@ export class PentairLightAccessory {
     try {
       const status = await this.api.getDeviceStatus(this.deviceId);
 
-      // Parse on/off state.
-      const lseRaw = status['lse'];
-      const isOn =
-        lseRaw === '1' || lseRaw === 1 || lseRaw === true;
+      // d13: On/Off (0=OFF, 1=ON)
+      const d13Raw = status['d13'];
+      const isOn = d13Raw === '1' || d13Raw === 1 || d13Raw === true;
 
-      // Parse color index.
-      const lcoRaw = status['lco'];
+      // d1: Light Mode/Color (1=SAM, 2=Party, ... 11=White, 12=Magenta)
+      const d1Raw = status['d1'];
       let colorIndex: PentairColor = this.state.colorIndex;
-      if (lcoRaw !== undefined && lcoRaw !== null) {
-        const parsed = parseInt(String(lcoRaw), 10);
-        if (!isNaN(parsed) && parsed >= 0 && parsed <= 9) {
+      if (d1Raw !== undefined && d1Raw !== null) {
+        const parsed = parseInt(String(d1Raw), 10);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 12) {
           colorIndex = parsed as PentairColor;
         }
       }
@@ -279,7 +277,7 @@ export class PentairLightAccessory {
 
       // Derive hue/saturation from color index for HomeKit.
       const newHue = COLOR_TO_HUE[colorIndex] ?? 0;
-      const newSat = colorIndex === PentairColor.White ? 0 : 100;
+      const newSat = (colorIndex === PentairColor.White || colorIndex === PentairColor.SAM) ? 0 : 100;
 
       const { Characteristic: Char } = this.platform.hapApi.hap;
 

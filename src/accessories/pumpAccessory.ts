@@ -251,31 +251,10 @@ export class PentairPumpAccessory {
     try {
       const status = await this.api.getDeviceStatus(this.deviceId);
 
-      // Determine which (if any) program is active.
-      let runningProgram = 0;
-      for (let p = 1; p <= PROGRAM_COUNT; p++) {
-        const activeField = `zp${p}e13`;
-        const rawValue = status[activeField];
-        // Field is "1" or 1 when that program is running.
-        if (rawValue === '1' || rawValue === 1 || rawValue === true) {
-          runningProgram = p;
-          break;
-        }
-      }
-
-      // Fallback: check the s14 running-program field.
-      if (runningProgram === 0) {
-        const s14 = status['s14'];
-        if (typeof s14 === 'number' && s14 >= 1 && s14 <= PROGRAM_COUNT) {
-          runningProgram = s14;
-        } else if (typeof s14 === 'string') {
-          const parsed = parseInt(s14, 10);
-          if (!isNaN(parsed) && parsed >= 1 && parsed <= PROGRAM_COUNT) {
-            runningProgram = parsed;
-          }
-        }
-      }
-
+      // s14 = Active Program Number (0 = none, ≥1 = running program index).
+      const s14Raw = status['s14'];
+      const s14 = parseInt(String(s14Raw ?? '0'), 10);
+      const runningProgram = isNaN(s14) || s14 < 1 ? 0 : Math.min(s14, PROGRAM_COUNT);
       const isActive = runningProgram > 0;
 
       const prevActive = this.state.active;

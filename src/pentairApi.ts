@@ -86,27 +86,29 @@ export class PentairApi {
    * @returns A flat key/value map of status fields.
    */
   async getDeviceStatus(deviceId: string): Promise<DeviceStatus> {
-    // Probe multiple endpoint variants to find which one returns data.
-    const variants: Array<{ method: string; path: string; body?: Record<string, unknown> | unknown[] }> = [
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { deviceId } },
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { serialNumber: deviceId } },
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { deviceIds: [deviceId] } },
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { serialNumbers: [deviceId] } },
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: [deviceId] },
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { id: deviceId } },
-      { method: 'POST', path: ENDPOINT_DEVICE_STATUS, body: { ids: [deviceId] } },
-    ];
+    const raw = await this.signedRequest('POST', ENDPOINT_DEVICE_STATUS, { deviceId });
 
-    for (const v of variants) {
-      try {
-        const response = await this.signedRequest(v.method, v.path, v.body);
-        this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ${JSON.stringify(response)}`);
-      } catch (err) {
-        this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ERROR ${(err as Error).message}`);
-      }
+    // Response shape: { response: { data: [{ fields: { key: { value: ... } } }], code: "..." } }
+    type FieldEntry = { value: string | number | boolean | null };
+    const envelope = (raw as Record<string, unknown>)?.['response'] as Record<string, unknown> | undefined;
+    const data = Array.isArray(envelope?.['data']) ? (envelope!['data'] as Record<string, unknown>[]) : [];
+
+    if (data.length === 0) {
+      this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) returned empty data`);
+      return {};
     }
 
-    return {};
+    const fields = data[0]['fields'] as Record<string, FieldEntry> | undefined;
+    if (!fields) {
+      this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) has no fields`);
+      return {};
+    }
+
+    const status: DeviceStatus = {};
+    for (const [key, field] of Object.entries(fields)) {
+      status[key] = field.value;
+    }
+    return status;
   }
 
   /**
