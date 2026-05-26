@@ -199,23 +199,17 @@ class PentairLightAccessory {
                     colorIndex = parsed;
                 }
             }
-            const prevOn = this.state.on;
-            const prevColor = this.state.colorIndex;
             this.state.on = isOn;
             this.state.colorIndex = colorIndex;
             // Derive hue/saturation from color index for HomeKit.
             const newHue = COLOR_TO_HUE[colorIndex] ?? 0;
             const newSat = (colorIndex === 11 /* PentairColor.White */ || colorIndex === 1 /* PentairColor.SAM */) ? 0 : 100;
+            this.hue = newHue;
+            this.saturation = newSat;
             const { Characteristic: Char } = this.platform.hapApi.hap;
-            if (prevOn !== isOn) {
-                this.service.updateCharacteristic(Char.On, isOn);
-            }
-            if (prevColor !== colorIndex) {
-                this.hue = newHue;
-                this.saturation = newSat;
-                this.service.updateCharacteristic(Char.Hue, newHue);
-                this.service.updateCharacteristic(Char.Saturation, newSat);
-            }
+            this.service.updateCharacteristic(Char.On, isOn);
+            this.service.updateCharacteristic(Char.Hue, newHue);
+            this.service.updateCharacteristic(Char.Saturation, newSat);
         }
         catch (err) {
             this.platform.log.warn(`Light [${this.deviceId}]: status poll failed`, err);

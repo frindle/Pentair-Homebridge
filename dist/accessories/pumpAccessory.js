@@ -204,19 +204,13 @@ class PentairPumpAccessory {
             const s14 = parseInt(String(s14Raw ?? '0'), 10);
             const runningProgram = isNaN(s14) || s14 < 1 ? 0 : Math.min(s14, PROGRAM_COUNT);
             const isActive = runningProgram > 0;
-            const prevActive = this.state.active;
-            const prevProgram = this.state.program;
             this.state.active = isActive;
             if (isActive) {
                 this.state.program = runningProgram;
             }
             const { Characteristic: Char } = this.platform.hapApi.hap;
-            if (prevActive !== isActive) {
-                this.service.updateCharacteristic(Char.Active, isActive ? Char.Active.ACTIVE : Char.Active.INACTIVE);
-            }
-            if (prevProgram !== this.state.program || prevActive !== isActive) {
-                this.service.updateCharacteristic(Char.RotationSpeed, isActive ? programToSpeed(this.state.program) : 0);
-            }
+            this.service.updateCharacteristic(Char.Active, isActive ? Char.Active.ACTIVE : Char.Active.INACTIVE);
+            this.service.updateCharacteristic(Char.RotationSpeed, isActive ? programToSpeed(this.state.program) : 0);
         }
         catch (err) {
             this.platform.log.warn(`Pump [${this.deviceId}]: status poll failed`, err);

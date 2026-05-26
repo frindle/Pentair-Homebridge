@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.16] - 2026-05-26
+
+### Fixed
+- Pump and light `pollStatus`: always call `updateCharacteristic` on every poll instead of only on change — removes the race where HomeKit caches the initial `false` state before the first poll completes, then misses the one-time notification that would have corrected it; HomeKit now re-syncs within 30 seconds regardless of whether it missed a prior notification
+- Confirmed correct field names from live payload: `s14` (pump Active Program Number), `d13` (light On/Off), `d1` (light Mode/Color)
+
 ## [1.1.15] - 2026-05-26
 
 ### Added

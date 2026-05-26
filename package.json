@@ -1,6 +1,6 @@
 {
   "name": "homebridge-pentair-cloud",
-  "version": "1.1.15",
+  "version": "1.1.16",
   "description": "Homebridge plugin to control Pentair pool pump and IntelliBrite lights via the Pentair Home cloud API",
   "license": "MIT",
   "main": "dist/index.js",
