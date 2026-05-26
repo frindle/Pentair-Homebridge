@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.18] - 2026-05-26
+
+### Changed
+- Minimum Node.js version raised from 18 (EOL) to 22 to match current Homebridge-supported LTS versions
+- CI now runs build against both Node 22 and Node 24
+- Override `js-cookie` to ≥ 3.0.6 to resolve transitive vulnerability in `amazon-cognito-identity-js`
+
 ## [1.1.17] - 2026-05-26
 
 ### Fixed

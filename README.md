@@ -109,7 +109,7 @@ The device list API sometimes returns empty names. This is cosmetic and does not
 ## Requirements
 
 - Homebridge ≥ 1.6.0
-- Node.js ≥ 18.0.0
+- Node.js ≥ 22.0.0
 - Active Pentair Home account with cloud-connected equipment
 
 ## How It Works
