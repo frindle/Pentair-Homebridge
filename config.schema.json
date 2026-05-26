@@ -4,18 +4,21 @@
   "singular": true,
   "schema": {
     "type": "object",
-    "required": ["email", "password"],
+    "required": ["name", "email", "password"],
     "properties": {
+      "name": {
+        "title": "Plugin Name",
+        "type": "string",
+        "default": "Pentair Cloud"
+      },
       "email": {
         "title": "Pentair Account Email",
         "type": "string",
-        "format": "email",
-        "required": true
+        "format": "email"
       },
       "password": {
         "title": "Pentair Account Password",
         "type": "string",
-        "required": true,
         "x-schema-form": {
           "type": "password"
         }

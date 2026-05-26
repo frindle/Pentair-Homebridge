@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.19] - 2026-05-26
+
+### Fixed
+- `package.json`: add `homepage` and `bugs.url` fields required by Homebridge verified plugin checks
+- `package.json`: remove `homebridge` from `peerDependencies` (must only appear in `devDependencies`)
+- `config.schema.json`: remove invalid `"required": true/false` from individual properties (JSON Schema requires an array at the object level, which was already present)
+- `config.schema.json`: add missing `name` property
+
 ## [1.1.18] - 2026-05-26
 
 ### Changed
