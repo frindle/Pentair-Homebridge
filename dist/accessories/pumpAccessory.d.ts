@@ -48,7 +48,7 @@ export declare class PentairPumpAccessory {
      * Off: stops all programs.
      */
     private handleActiveSet;
-    /** Returns the rotation speed corresponding to the current program. */
+    /** Returns the last-polled rotation speed percentage. */
     private handleSpeedGet;
     /**
      * Changes the pump speed by selecting the appropriate program.

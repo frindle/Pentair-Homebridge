@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.21] - 2026-05-26
+
+### Fixed
+- Pump `pollStatus`: replace fixed program-bucket midpoints (62% for program 3) with actual live speed derived from `s15` (control mode) + `s16` (setpoint) — HomeKit now shows the same percentage as the Pentair app
+  - Mode 1 (percentage): `s16` is used directly (0–100)
+  - Mode 2 (GPM/flow): `s16 ÷ 1200 × 100` (IF31 max ~120 GPM, stored in 1/10-GPM units)
+  - Mode 3 (RPM): `s16 ÷ 3450 × 100`
+
 ## [1.1.20] - 2026-05-26
 
 ### Security

@@ -19,11 +19,35 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PentairPumpAccessory = void 0;
 const settings_1 = require("../settings");
-/** Number of programs the Pentair pump exposes. */
+/** Maximum number of named program slots used for the HomeKit set direction. */
 const PROGRAM_COUNT = 4;
+/** IF31 max rated flow in 1/10-GPM units (120 GPM × 10). */
+const GPM_MAX_UNITS = 1200;
+/** IF31 max RPM. */
+const RPM_MAX = 3450;
+/**
+ * Converts the live setpoint fields (s15=mode, s16=setpoint) to a HomeKit
+ * RotationSpeed percentage (0–100).
+ *
+ * Modes observed in the API:
+ *  1 = percentage (setpoint 0–100 directly)
+ *  2 = flow/GPM (setpoint in 1/10-GPM, max 120 GPM = 1200 units)
+ *  3 = RPM (setpoint in RPM, max 3450)
+ */
+function setpointToSpeed(mode, setpoint) {
+    if (setpoint <= 0)
+        return 0;
+    if (mode === 1)
+        return Math.min(setpoint, 100);
+    if (mode === 2)
+        return Math.min(Math.round(setpoint / GPM_MAX_UNITS * 100), 100);
+    if (mode === 3)
+        return Math.min(Math.round(setpoint / RPM_MAX * 100), 100);
+    return 0;
+}
 /**
  * Maps a HomeKit RotationSpeed percentage (1–100) to a pump program number
- * (1–4).  Returns 1 for any value ≤ 25, scaling up in 25-point bands.
+ * (1–4) for the write direction.
  */
 function speedToProgram(speed) {
     if (speed <= 25)
@@ -33,19 +57,6 @@ function speedToProgram(speed) {
     if (speed <= 75)
         return 3;
     return 4;
-}
-/**
- * Returns the canonical speed percentage to represent a given program number
- * in HomeKit (midpoint of each band).
- */
-function programToSpeed(program) {
-    switch (program) {
-        case 1: return 12; // midpoint of 1–25
-        case 2: return 37; // midpoint of 26–50
-        case 3: return 62; // midpoint of 51–75
-        case 4: return 87; // midpoint of 76–100
-        default: return 0;
-    }
 }
 /**
  * Homebridge accessory that bridges a Pentair variable-speed pump to HomeKit.
@@ -59,6 +70,7 @@ class PentairPumpAccessory {
         this.state = {
             active: false,
             program: 1,
+            speedPct: 0,
         };
         /** Handle for the polling interval so it can be cleared on teardown. */
         this.pollHandle = null;
@@ -113,6 +125,7 @@ class PentairPumpAccessory {
         const wantActive = value === this.platform.hapApi.hap.Characteristic.Active.ACTIVE;
         this.platform.log.info(`Pump [${this.deviceId}]: set active → ${wantActive}`);
         const prevActive = this.state.active;
+        const prevSpeedPct = this.state.speedPct;
         try {
             if (wantActive) {
                 await this.startProgram(this.state.program);
@@ -121,16 +134,18 @@ class PentairPumpAccessory {
             else {
                 await this.stopAllPrograms();
                 this.state.active = false;
+                this.state.speedPct = 0;
             }
         }
         catch (err) {
             this.platform.log.error(`Pump [${this.deviceId}]: active set failed`, err);
             this.state.active = prevActive;
+            this.state.speedPct = prevSpeedPct;
         }
     }
-    /** Returns the rotation speed corresponding to the current program. */
+    /** Returns the last-polled rotation speed percentage. */
     handleSpeedGet() {
-        return this.state.active ? programToSpeed(this.state.program) : 0;
+        return this.state.speedPct;
     }
     /**
      * Changes the pump speed by selecting the appropriate program.
@@ -185,18 +200,21 @@ class PentairPumpAccessory {
     async pollStatus() {
         try {
             const status = await this.api.getDeviceStatus(this.deviceId);
-            // s14 = Active Program Number (0 = none, ≥1 = running program index).
-            const s14Raw = status['s14'];
-            const s14 = parseInt(String(s14Raw ?? '0'), 10);
-            const runningProgram = isNaN(s14) || s14 < 1 ? 0 : Math.min(s14, PROGRAM_COUNT);
-            const isActive = runningProgram > 0;
+            // s14 = active program slot (0-indexed; 0 = off, ≥1 = running).
+            const s14 = parseInt(String(status['s14'] ?? '0'), 10);
+            const isActive = !isNaN(s14) && s14 > 0;
+            // s15 = control mode, s16 = current setpoint — use these for display %.
+            const mode = parseInt(String(status['s15'] ?? '0'), 10);
+            const setpoint = parseInt(String(status['s16'] ?? '0'), 10);
+            const speedPct = isActive ? setpointToSpeed(mode, setpoint) : 0;
             this.state.active = isActive;
+            this.state.speedPct = speedPct;
             if (isActive) {
-                this.state.program = runningProgram;
+                this.state.program = Math.min(Math.max(s14, 1), PROGRAM_COUNT);
             }
             const { Characteristic: Char } = this.platform.hapApi.hap;
             this.service.updateCharacteristic(Char.Active, isActive ? Char.Active.ACTIVE : Char.Active.INACTIVE);
-            this.service.updateCharacteristic(Char.RotationSpeed, isActive ? programToSpeed(this.state.program) : 0);
+            this.service.updateCharacteristic(Char.RotationSpeed, speedPct);
         }
         catch (err) {
             this.platform.log.warn(`Pump [${this.deviceId}]: status poll failed`, err);
