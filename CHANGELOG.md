@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.20] - 2026-05-26
+
+### Security
+- Replace `amazon-cognito-identity-js` with a pure Node.js SRP-6a implementation (`@aws-sdk/client-cognito-identity-provider` + native `BigInt` + built-in `crypto`) — eliminates the transitive `js-cookie ≤3.0.5` high-severity vulnerability for consumers (our `overrides` block only protected local installs)
+- Remove `overrides.js-cookie` (no longer needed)
+
 ## [1.1.19] - 2026-05-26
 
 ### Fixed
