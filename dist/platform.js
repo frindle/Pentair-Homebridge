@@ -51,7 +51,7 @@ class PentairHomebridgePlatform {
             return;
         }
         this.auth = new auth_1.PentairAuth(cfg.email, cfg.password);
-        this.pentairApi = new pentairApi_1.PentairApi(this.auth, this.log);
+        this.pentairApi = new pentairApi_1.PentairApi(this.auth, this.log, cfg.debugLogging ?? false);
         // Homebridge fires this event once the HAP server is ready.
         this.hapApi.on('didFinishLaunching', () => {
             this.log.debug('didFinishLaunching');

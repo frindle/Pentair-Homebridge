@@ -29,7 +29,8 @@ export type CommandPayload = Record<string, string>;
 export declare class PentairApi {
     private readonly auth;
     private readonly log;
-    constructor(auth: PentairAuth, log: Logger);
+    private readonly debugLogging;
+    constructor(auth: PentairAuth, log: Logger, debugLogging?: boolean);
     /**
      * Retrieves all devices associated with the authenticated user account.
      *

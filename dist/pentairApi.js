@@ -21,9 +21,10 @@ const settings_1 = require("./settings");
  *  - Expose typed methods for each API operation
  */
 class PentairApi {
-    constructor(auth, log) {
+    constructor(auth, log, debugLogging = false) {
         this.auth = auth;
         this.log = log;
+        this.debugLogging = debugLogging;
     }
     // ---------------------------------------------------------------------------
     // Public API methods
@@ -58,19 +59,24 @@ class PentairApi {
      * @returns A flat key/value map of status fields.
      */
     async getDeviceStatus(deviceId) {
-        // Probe multiple endpoint variants to find which one returns data.
-        const variants = [
-            { method: 'GET', path: `/device2/device2-service/user/device/${deviceId}` },
-            { method: 'GET', path: '/device2/device2-service/user/devices' },
-            { method: 'GET', path: settings_1.ENDPOINT_DEVICE_STATUS },
-            { method: 'POST', path: settings_1.ENDPOINT_DEVICE_STATUS, body: { deviceId } },
-            { method: 'POST', path: settings_1.ENDPOINT_DEVICE_STATUS, body: { serialNumber: deviceId } },
-        ];
-        for (const v of variants) {
-            const response = await this.signedRequest(v.method, v.path, v.body);
-            this.log.warn(`PentairApi probe [${v.method} ${v.path}]: ${JSON.stringify(response)}`);
+        const raw = await this.signedRequest('POST', settings_1.ENDPOINT_DEVICE_STATUS, { deviceIds: [deviceId] });
+        const envelope = raw?.response;
+        const data = envelope?.data ?? [];
+        if (this.debugLogging) {
+            this.log.info(`PentairApi: getDeviceStatus(${deviceId}) raw → ${JSON.stringify(raw)}`);
         }
-        return {};
+        if (data.length === 0 || !data[0].fields) {
+            this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) returned no data`);
+            return {};
+        }
+        const status = {};
+        for (const [key, field] of Object.entries(data[0].fields)) {
+            status[key] = field.value;
+        }
+        if (this.debugLogging) {
+            this.log.info(`PentairApi: getDeviceStatus(${deviceId}) parsed → ${JSON.stringify(status)}`);
+        }
+        return status;
     }
     /**
      * Sends a command payload to a device.

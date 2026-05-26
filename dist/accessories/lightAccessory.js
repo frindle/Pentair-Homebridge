@@ -24,44 +24,38 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PentairLightAccessory = void 0;
 const settings_1 = require("../settings");
-/**
- * Representative hue values used when HomeKit asks for the current color.
- * These are midpoints of each range that maps back to the given Pentair color.
- */
+/** Representative HomeKit hue for each Pentair color index. */
 const COLOR_TO_HUE = {
-    [0 /* PentairColor.White */]: 0, // achromatic – saturation will be 0
-    [1 /* PentairColor.Magenta */]: 315,
-    [2 /* PentairColor.Blue */]: 230,
-    [3 /* PentairColor.Green */]: 100,
-    [4 /* PentairColor.Red */]: 10,
-    [5 /* PentairColor.Party */]: 40,
-    [6 /* PentairColor.Romance */]: 275,
-    [7 /* PentairColor.Caribbean */]: 175,
-    [8 /* PentairColor.American */]: 210, // treated as blue-ish when mapping back
-    [9 /* PentairColor.Sunset */]: 25, // warm orange-red
+    [1 /* PentairColor.SAM */]: 0, // show mode — map to red as placeholder
+    [2 /* PentairColor.Party */]: 40,
+    [3 /* PentairColor.Romance */]: 275,
+    [4 /* PentairColor.Caribbean */]: 175,
+    [5 /* PentairColor.American */]: 210,
+    [6 /* PentairColor.Sunset */]: 25,
+    [7 /* PentairColor.Royal */]: 255,
+    [8 /* PentairColor.Blue */]: 230,
+    [9 /* PentairColor.Green */]: 100,
+    [10 /* PentairColor.Red */]: 10,
+    [11 /* PentairColor.White */]: 0, // saturation 0
+    [12 /* PentairColor.Magenta */]: 315,
 };
-/**
- * Converts a HomeKit Hue (0–360) and Saturation (0–100) to a Pentair color
- * index.
- */
 function hueToColorIndex(hue, saturation) {
     if (saturation < 20)
-        return 0 /* PentairColor.White */;
-    // Normalise hue to [0, 360)
+        return 11 /* PentairColor.White */;
     const h = ((hue % 360) + 360) % 360;
     if (h <= 20 || h >= 340)
-        return 4 /* PentairColor.Red */;
+        return 10 /* PentairColor.Red */;
     if (h <= 60)
-        return 5 /* PentairColor.Party */;
+        return 2 /* PentairColor.Party */;
     if (h <= 150)
-        return 3 /* PentairColor.Green */;
+        return 9 /* PentairColor.Green */;
     if (h <= 200)
-        return 7 /* PentairColor.Caribbean */;
+        return 4 /* PentairColor.Caribbean */;
     if (h <= 260)
-        return 2 /* PentairColor.Blue */;
+        return 8 /* PentairColor.Blue */;
     if (h <= 290)
-        return 6 /* PentairColor.Romance */;
-    /* 291–339 */ return 1 /* PentairColor.Magenta */;
+        return 3 /* PentairColor.Romance */;
+    /* 291–339 */ return 12 /* PentairColor.Magenta */;
 }
 /**
  * Homebridge accessory that bridges a Pentair IntelliBrite light to HomeKit.
@@ -73,7 +67,7 @@ class PentairLightAccessory {
         /** Locally cached state to avoid redundant cloud round-trips. */
         this.state = {
             on: false,
-            colorIndex: 0 /* PentairColor.White */,
+            colorIndex: 11 /* PentairColor.White */,
         };
         /** Derived hue/saturation so HomeKit reads are consistent with color index. */
         this.hue = 0;
@@ -131,7 +125,7 @@ class PentairLightAccessory {
         const on = value;
         this.platform.log.info(`Light [${this.deviceId}]: set on → ${on}`);
         try {
-            await this.api.sendCommand(this.deviceId, { lse: on ? '1' : '0' });
+            await this.api.sendCommand(this.deviceId, { d13: on ? '1' : '0' });
         }
         catch (err) {
             this.platform.log.error(`Light [${this.deviceId}]: on/off set failed`, err);
@@ -176,7 +170,7 @@ class PentairLightAccessory {
         this.platform.log.info(`Light [${this.deviceId}]: set color → ${colorIndex} ` +
             `(hue=${this.hue}, sat=${this.saturation})`);
         await this.api.sendCommand(this.deviceId, {
-            lco: String(colorIndex),
+            d1: String(colorIndex),
         });
         this.state.colorIndex = colorIndex;
     }
@@ -193,15 +187,15 @@ class PentairLightAccessory {
     async pollStatus() {
         try {
             const status = await this.api.getDeviceStatus(this.deviceId);
-            // Parse on/off state.
-            const lseRaw = status['lse'];
-            const isOn = lseRaw === '1' || lseRaw === 1 || lseRaw === true;
-            // Parse color index.
-            const lcoRaw = status['lco'];
+            // d13: On/Off (0=OFF, 1=ON)
+            const d13Raw = status['d13'];
+            const isOn = d13Raw === '1' || d13Raw === 1 || d13Raw === true;
+            // d1: Light Mode/Color (1=SAM, 2=Party, ... 11=White, 12=Magenta)
+            const d1Raw = status['d1'];
             let colorIndex = this.state.colorIndex;
-            if (lcoRaw !== undefined && lcoRaw !== null) {
-                const parsed = parseInt(String(lcoRaw), 10);
-                if (!isNaN(parsed) && parsed >= 0 && parsed <= 9) {
+            if (d1Raw !== undefined && d1Raw !== null) {
+                const parsed = parseInt(String(d1Raw), 10);
+                if (!isNaN(parsed) && parsed >= 1 && parsed <= 12) {
                     colorIndex = parsed;
                 }
             }
@@ -211,7 +205,7 @@ class PentairLightAccessory {
             this.state.colorIndex = colorIndex;
             // Derive hue/saturation from color index for HomeKit.
             const newHue = COLOR_TO_HUE[colorIndex] ?? 0;
-            const newSat = colorIndex === 0 /* PentairColor.White */ ? 0 : 100;
+            const newSat = (colorIndex === 11 /* PentairColor.White */ || colorIndex === 1 /* PentairColor.SAM */) ? 0 : 100;
             const { Characteristic: Char } = this.platform.hapApi.hap;
             if (prevOn !== isOn) {
                 this.service.updateCharacteristic(Char.On, isOn);

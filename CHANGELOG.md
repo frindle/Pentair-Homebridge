@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.15] - 2026-05-26
+
+### Added
+- `debugLogging` config option — when enabled, logs the raw and parsed device status response at INFO level so you can see the actual field names returned by the API without needing Homebridge debug mode
+
 ## [1.1.14] - 2026-05-21
 
 ### Fixed

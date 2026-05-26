@@ -49,6 +49,12 @@
             "type": "string"
           }
         }
+      },
+      "debugLogging": {
+        "title": "Debug Logging",
+        "type": "boolean",
+        "default": false,
+        "description": "Log raw device status responses at INFO level. Enable temporarily to diagnose status not updating."
       }
     }
   },
@@ -72,6 +78,13 @@
       "expandable": true,
       "expanded": false,
       "items": ["light"]
+    },
+    {
+      "type": "section",
+      "title": "Advanced",
+      "expandable": true,
+      "expanded": false,
+      "items": ["debugLogging"]
     }
   ]
 }

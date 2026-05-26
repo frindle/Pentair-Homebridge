@@ -28,18 +28,23 @@ export interface LightConfig {
     deviceId: string;
     name: string;
 }
-/** All Pentair IntelliBrite color indices with their semantic names. */
+/**
+ * Pentair PLC1 v2 API color indices (field d1).
+ * Values match what the device reports and what sendCommand should send.
+ */
 export declare const enum PentairColor {
-    White = 0,
-    Magenta = 1,
-    Blue = 2,
-    Green = 3,
-    Red = 4,
-    Party = 5,
-    Romance = 6,
-    Caribbean = 7,
-    American = 8,
-    Sunset = 9
+    SAM = 1,
+    Party = 2,
+    Romance = 3,
+    Caribbean = 4,
+    American = 5,
+    Sunset = 6,
+    Royal = 7,
+    Blue = 8,
+    Green = 9,
+    Red = 10,
+    White = 11,
+    Magenta = 12
 }
 /**
  * Homebridge accessory that bridges a Pentair IntelliBrite light to HomeKit.

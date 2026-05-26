@@ -45,10 +45,12 @@ export type CommandPayload = Record<string, string>;
 export class PentairApi {
   private readonly auth: PentairAuth;
   private readonly log: Logger;
+  private readonly debugLogging: boolean;
 
-  constructor(auth: PentairAuth, log: Logger) {
+  constructor(auth: PentairAuth, log: Logger, debugLogging = false) {
     this.auth = auth;
     this.log = log;
+    this.debugLogging = debugLogging;
   }
 
   // ---------------------------------------------------------------------------
@@ -94,6 +96,10 @@ export class PentairApi {
     const envelope = (raw as { response?: Envelope })?.response;
     const data = envelope?.data ?? [];
 
+    if (this.debugLogging) {
+      this.log.info(`PentairApi: getDeviceStatus(${deviceId}) raw → ${JSON.stringify(raw)}`);
+    }
+
     if (data.length === 0 || !data[0].fields) {
       this.log.warn(`PentairApi: getDeviceStatus(${deviceId}) returned no data`);
       return {};
@@ -103,6 +109,11 @@ export class PentairApi {
     for (const [key, field] of Object.entries(data[0].fields!)) {
       status[key] = field.value;
     }
+
+    if (this.debugLogging) {
+      this.log.info(`PentairApi: getDeviceStatus(${deviceId}) parsed → ${JSON.stringify(status)}`);
+    }
+
     return status;
   }
 

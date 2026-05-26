@@ -46,6 +46,7 @@ interface PentairPlatformConfig extends PlatformConfig {
   password: string;
   pump?: PumpConfig;
   light?: LightConfig;
+  debugLogging?: boolean;
 }
 
 /**
@@ -85,7 +86,7 @@ export class PentairHomebridgePlatform implements DynamicPlatformPlugin {
     }
 
     this.auth = new PentairAuth(cfg.email, cfg.password);
-    this.pentairApi = new PentairApi(this.auth, this.log);
+    this.pentairApi = new PentairApi(this.auth, this.log, cfg.debugLogging ?? false);
 
     // Homebridge fires this event once the HAP server is ready.
     this.hapApi.on('didFinishLaunching', () => {
