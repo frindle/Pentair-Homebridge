@@ -55,16 +55,9 @@ export declare class PentairPumpAccessory {
      * If the pump is off and a non-zero speed is requested, it is turned on.
      */
     private handleSpeedSet;
-    /**
-     * Sends the "start program N" command to the cloud API.
-     *
-     * @param program - Program number 1–4.
-     */
+    /** Sends the start command to the cloud API (d25=1 = Enabled). */
     private startProgram;
-    /**
-     * Sends "stop" commands for all four programs to ensure the pump halts
-     * regardless of which program was running.
-     */
+    /** Sends the stop command to the cloud API (d25=0 = OFF). */
     private stopAllPrograms;
     /** Starts the periodic status polling loop. */
     private startPolling;

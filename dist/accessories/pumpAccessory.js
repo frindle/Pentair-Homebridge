@@ -161,27 +161,13 @@ class PentairPumpAccessory {
     // ---------------------------------------------------------------------------
     // Cloud API helpers
     // ---------------------------------------------------------------------------
-    /**
-     * Sends the "start program N" command to the cloud API.
-     *
-     * @param program - Program number 1–4.
-     */
-    async startProgram(program) {
-        const p = Math.max(1, Math.min(PROGRAM_COUNT, Math.floor(program)));
-        await this.api.sendCommand(this.deviceId, {
-            [`zp${p}e10`]: '3',
-        });
+    /** Sends the start command to the cloud API (d25=1 = Enabled). */
+    async startProgram(_program) {
+        await this.api.sendCommand(this.deviceId, { d25: '1' });
     }
-    /**
-     * Sends "stop" commands for all four programs to ensure the pump halts
-     * regardless of which program was running.
-     */
+    /** Sends the stop command to the cloud API (d25=0 = OFF). */
     async stopAllPrograms() {
-        const stopPayload = {};
-        for (let p = 1; p <= PROGRAM_COUNT; p++) {
-            stopPayload[`zp${p}e10`] = '2';
-        }
-        await this.api.sendCommand(this.deviceId, stopPayload);
+        await this.api.sendCommand(this.deviceId, { d25: '0' });
     }
     // ---------------------------------------------------------------------------
     // Polling

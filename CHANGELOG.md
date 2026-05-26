@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.17] - 2026-05-26
+
+### Fixed
+- Pump start/stop commands now use `d25` ("Start/Stop" field: `1`=Enabled, `0`=OFF) instead of `zp{N}e10` per-program toggles — previous stop command only targeted programs 1–4 and used undocumented values (`2`/`3`) that may not have been honoured by the device
+
 ## [1.1.16] - 2026-05-26
 
 ### Fixed
