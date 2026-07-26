@@ -29,7 +29,7 @@
   "devDependencies": {
     "@types/node": "^22.19.19",
     "homebridge": ">=1.6.0",
-    "typescript": "^5.0.0"
+    "typescript": "^7.0.2"
   },
   "homepage": "https://github.com/frindle/Pentair-Homebridge#readme",
   "bugs": {
